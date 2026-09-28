@@ -34,3 +34,27 @@ jobs:
 
       - name: Test
         run: ctest --preset ${{ matrix.preset }} --timeout 300
+
+  # Infrastructure checks that need no AWS account: formatting, validation,
+  # and a plan against mocked providers (deploy/terraform/tests).
+  infra:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      - name: Terraform fmt
+        run: terraform -chdir=deploy/terraform fmt -recursive -check
+
+      - name: Terraform validate and test
+        run: |
+          terraform -chdir=deploy/terraform init -backend=false -input=false
+          terraform -chdir=deploy/terraform validate
+          terraform -chdir=deploy/terraform test
+
+      - name: Shellcheck
+        run: shellcheck -x deploy/scripts/*.sh scripts/*.sh tests/integration/*.sh bench/*.sh
