@@ -17,7 +17,7 @@ weaknesses are written up in [docs/DESIGN.md](docs/DESIGN.md).
 | 1 | Single-node server: epoll event loops, RESP parser, lock-striped store | Done |
 | 2 | Sharding: consistent hashing with virtual nodes, MOVED/ASK routing, live slot migration | Done |
 | 3 | Synchronous primary-backup replication, heartbeats, automatic failover with epoch fencing | Done |
-| 4 | AWS deployment across 3 availability zones with Terraform | Built and statically verified; first real deployment pending |
+| 4 | AWS deployment across 3 availability zones with Terraform | Built; scripts rehearsed locally on Docker stand-ins; first real AWS deployment pending |
 | 5 | Benchmarks against Redis on EC2, failure testing | Planned |
 | 6 | Final documentation | Planned |
 
@@ -184,6 +184,13 @@ deploy/scripts/teardown.sh    # destroy everything and verify nothing tagged dis
 **Safety net:** every instance shuts itself down, and is then terminated, 4
 hours after boot (`-var max_lifetime_hours=N` to change). A forgotten cluster
 can't keep billing for long, but `teardown.sh` is still the way to finish.
+
+**Rehearsing without AWS:** `deploy/local/rehearse.sh up` starts 9 Docker
+containers that stand in for the instances. Run it from Git Bash or a Linux
+shell on the host, not inside the dev container. Then
+`deploy/local/rehearse.sh run deploy/scripts/deploy.sh` (and likewise
+`start.sh`, `kill-node.sh n1`, …) runs the same scripts against them, and
+`rehearse.sh down` removes everything.
 
 ## Testing
 

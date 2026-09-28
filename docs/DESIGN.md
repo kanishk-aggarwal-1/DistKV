@@ -908,6 +908,36 @@ generated.
 - **shellcheck** is clean on every script.
 - **CI** runs all of the above in an `infra` job.
 
-**Not yet verified:** the scripts running against real instances. That
-happens on the first `up.sh` / `deploy.sh` / `start.sh`, which is billable
-and needs the operator's go-ahead.
+### Local rehearsal of the deploy scripts
+
+[deploy/local/rehearse.sh](../deploy/local/rehearse.sh) runs 9 Docker
+containers as stand-ins for the EC2 instances, on a private network with the
+same layout, roles and fake AZ labels. Each runs an SSH server with the
+`ubuntu` user and has the directories the boot script creates. A generated
+inventory points the **unmodified** deploy scripts at them;
+`DISTKV_GEN_DIR` keeps it apart from a real deployment's inventory.
+
+**Rehearsal run (all passed):**
+- `deploy.sh` built on the "load generator" and distributed the binaries to 8
+  hosts, in 37 s.
+- `start.sh` formed 3 groups and added the spare. Every backup synced.
+- From the load generator:
+  - `redis-cli -c` wrote 300 keys;
+  - memtier `--cluster-mode` discovered 3 primaries and ran without errors.
+- `kill-node.sh n1` (SIGKILL):
+  - g1's backup n2 was promoted and the spare n7 synced as its new backup;
+  - all 300 keys were readable afterwards;
+  - a new write succeeded.
+- `status.sh` and `stop.sh` behaved as expected.
+
+**Bugs this caught before any money was spent:**
+- **In the rehearsal script itself:** `GROUPS` is a reserved bash variable
+  (the user's group ids), so `GROUPS=3` was silently ignored. The first run
+  started 237 containers before running out of addresses. They were all
+  removed, and the variable renamed.
+- **Cosmetic:** `distkv-admin show` had an unlabelled column.
+
+**What the rehearsal cannot cover:** Terraform itself, the boot script's
+package installs, the arm64 build, real AZs and network latency, and
+instance termination. Those are verified on the first real `up.sh` run, which
+is billable and needs the operator's go-ahead.

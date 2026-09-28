@@ -49,7 +49,7 @@ void printMap(const kv::cluster::ClusterMap& map) {
   for (uint32_t owner : map.slot_owner) ++slots_per_group[owner];
   std::printf("epoch %llu, %zu group(s), %zu node(s)\n",
               static_cast<unsigned long long>(map.epoch), map.groups.size(), map.nodes.size());
-  std::printf("%-6s %-6s %-10s %-6s %s\n", "GROUP", "SLOTS", "PRIMARY", "BACKUP", "");
+  std::printf("%-6s %-6s %-10s %-6s %s\n", "GROUP", "SLOTS", "PRIMARY", "BACKUP", "STATE");
   for (uint32_t i = 0; i < map.groups.size(); ++i) {
     const auto& g = map.groups[i];
     const char* backup_state = g.backup.empty() ? "(none)" : (g.backup_ready ? "ready" : "syncing");

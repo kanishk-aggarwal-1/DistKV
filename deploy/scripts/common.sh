@@ -8,7 +8,9 @@
 DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_DIR="$(cd "$DEPLOY_DIR/.." && pwd)"
 TF_DIR="$DEPLOY_DIR/terraform"
-GEN_DIR="$DEPLOY_DIR/.generated"
+# DISTKV_GEN_DIR lets the local rehearsal (deploy/local/) use its own
+# inventory and key without touching a real deployment's.
+GEN_DIR="${DISTKV_GEN_DIR:-$DEPLOY_DIR/.generated}"
 INVENTORY="$GEN_DIR/inventory.json"
 
 # Ports used on the instances.
