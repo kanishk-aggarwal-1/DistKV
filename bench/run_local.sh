@@ -23,7 +23,7 @@ mkdir -p "$OUT"
 
 {
   echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  echo "git_rev: $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  echo "git_rev: $(git describe --always --dirty 2>/dev/null || echo unknown)"
   echo "kernel: $(uname -r)"
   echo "cpu: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | xargs)"
   echo "nproc: $(nproc)"

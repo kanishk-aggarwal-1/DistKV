@@ -1,0 +1,27 @@
+Json file bench/results/phase2-standalone-check/redis-p1-r2.json created...
+Writing results to stdout
+[RUN #1] Preparing benchmark client...
+[RUN #1] Launching threads now...
+[RUN #1 5%,   1 secs]  4 threads 25 conns:       64824 ops,   64820 (avg:   64820) ops/sec, 4.47MB/sec (avg: 4.47MB/sec),  1.54 (avg:  1.54) msec latency[RUN #1 10%,   2 secs]  4 threads 25 conns:      123157 ops,   58043 (avg:   61423) ops/sec, 4.00MB/sec (avg: 4.24MB/sec),  1.72 (avg:  1.63) msec latency[RUN #1 15%,   3 secs]  4 threads 25 conns:      191189 ops,   67432 (avg:   63434) ops/sec, 4.65MB/sec (avg: 4.38MB/sec),  1.48 (avg:  1.57) msec latency[RUN #1 20%,   4 secs]  4 threads 25 conns:      253764 ops,   62528 (avg:   63208) ops/sec, 4.31MB/sec (avg: 4.36MB/sec),  1.60 (avg:  1.58) msec latency[RUN #1 25%,   5 secs]  4 threads 25 conns:      318188 ops,   64370 (avg:   63440) ops/sec, 4.44MB/sec (avg: 4.38MB/sec),  1.55 (avg:  1.57) msec latency[RUN #1 30%,   6 secs]  4 threads 25 conns:      372885 ops,   54632 (avg:   61974) ops/sec, 3.77MB/sec (avg: 4.28MB/sec),  1.83 (avg:  1.61) msec latency[RUN #1 35%,   7 secs]  4 threads 25 conns:      433205 ops,   60256 (avg:   61729) ops/sec, 4.16MB/sec (avg: 4.26MB/sec),  1.66 (avg:  1.62) msec latency[RUN #1 40%,   8 secs]  4 threads 25 conns:      502904 ops,   69644 (avg:   62717) ops/sec, 4.80MB/sec (avg: 4.33MB/sec),  1.43 (avg:  1.59) msec latency[RUN #1 45%,   9 secs]  4 threads 25 conns:      571221 ops,   68258 (avg:   63332) ops/sec, 4.71MB/sec (avg: 4.37MB/sec),  1.46 (avg:  1.58) msec latency[RUN #1 50%,  10 secs]  4 threads 25 conns:      638467 ops,   67196 (avg:   63718) ops/sec, 4.64MB/sec (avg: 4.40MB/sec),  1.49 (avg:  1.57) msec latency[RUN #1 55%,  11 secs]  4 threads 25 conns:      713695 ops,   75168 (avg:   64758) ops/sec, 5.19MB/sec (avg: 4.47MB/sec),  1.33 (avg:  1.54) msec latency[RUN #1 60%,  12 secs]  4 threads 25 conns:      782950 ops,   69203 (avg:   65128) ops/sec, 4.77MB/sec (avg: 4.49MB/sec),  1.44 (avg:  1.53) msec latency[RUN #1 65%,  13 secs]  4 threads 25 conns:      851904 ops,   68904 (avg:   65418) ops/sec, 4.75MB/sec (avg: 4.51MB/sec),  1.45 (avg:  1.53) msec latency[RUN #1 70%,  14 secs]  4 threads 25 conns:      912529 ops,   60720 (avg:   65083) ops/sec, 4.19MB/sec (avg: 4.49MB/sec), 6802.75 (avg: 453.37) msec latency[RUN #1 75%,  15 secs]  4 threads 25 conns:      979760 ops,   67168 (avg:   65222) ops/sec, 4.63MB/sec (avg: 4.50MB/sec),  1.49 (avg: 422.37) msec latency[RUN #1 80%,  16 secs]  4 threads 25 conns:     1045918 ops,   65955 (avg:   65268) ops/sec, 4.55MB/sec (avg: 4.50MB/sec),  1.51 (avg: 395.75) msec latency[RUN #1 85%,  17 secs]  4 threads 25 conns:     1114908 ops,   68944 (avg:   65484) ops/sec, 4.76MB/sec (avg: 4.52MB/sec),  1.45 (avg: 371.35) msec latency[RUN #1 90%,  18 secs]  4 threads 25 conns:     1186672 ops,   71696 (avg:   65829) ops/sec, 4.95MB/sec (avg: 4.54MB/sec),  1.39 (avg: 348.97) msec latency[RUN #1 95%,  19 secs]  4 threads 25 conns:     1255124 ops,   68399 (avg:   65964) ops/sec, 4.72MB/sec (avg: 4.55MB/sec),  1.46 (avg: 330.02) msec latency[RUN #1 100%,  20 secs]  0 threads 25 conns:     1322567 ops,   68399 (avg:   66120) ops/sec, 4.72MB/sec (avg: 4.56MB/sec),  1.46 (avg: 313.27) msec latency
+
+
+CPU Utilization Summary
+  Total CPU time:   27.153s  (user 9.661s, sys 17.492s)
+  Wall time:        20.007s
+  Cores used:       1.357   (avg 33.9% across 4 worker threads)
+  Peak utilization: 157.4%
+Saving JSON output file: bench/results/phase2-standalone-check/redis-p1-r2.json
+Json file closed.
+4         Threads
+25        Connections per thread
+20        Seconds
+
+
+ALL STATS
+============================================================================================================================
+Type         Ops/sec     Hits/sec   Misses/sec    Avg. Latency     p50 Latency     p99 Latency   p99.9 Latency       KB/sec 
+----------------------------------------------------------------------------------------------------------------------------
+Sets         6013.01          ---          ---        51.55556         1.44700         3.08700         5.34300       451.50 
+Gets        60107.70     60107.70         0.00        44.56356         1.44700         3.02300         5.43900      4219.79 
+Waits           0.00          ---          ---             ---             ---             ---             ---          --- 
+Totals      66120.71     60107.70         0.00        45.19941         1.44700         3.03900         5.40700      4671.29 

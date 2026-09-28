@@ -1,4 +1,4 @@
-# Development image: compiler toolchain, Redis (for redis-cli and the
+# Development image: compiler toolchain, gRPC/protobuf, Redis (for redis-cli and the
 # baseline server), and memtier_benchmark.
 FROM ubuntu:24.04
 
@@ -6,6 +6,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake ninja-build git ca-certificates gdb \
         redis-server redis-tools \
+        libgrpc++-dev libprotobuf-dev protobuf-compiler protobuf-compiler-grpc \
         autoconf automake libtool pkg-config libevent-dev libssl-dev zlib1g-dev libpcre3-dev \
     && rm -rf /var/lib/apt/lists/*
 

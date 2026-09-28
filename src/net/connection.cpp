@@ -70,7 +70,7 @@ bool Connection::processInput() {
       in_.clear();
       return false;
     }
-    handler_(cmd, out_);
+    handler_(cmd, session_, out_);
   }
   in_.erase(0, offset);
   return true;

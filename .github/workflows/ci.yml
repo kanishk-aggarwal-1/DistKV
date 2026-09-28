@@ -15,7 +15,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y ninja-build redis-tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build redis-tools \
+            libgrpc++-dev libprotobuf-dev protobuf-compiler protobuf-compiler-grpc
 
       # TSan's fixed memory layout does not fit the 32-bit mmap randomisation
       # used by the runner's kernel ("unexpected memory mapping").

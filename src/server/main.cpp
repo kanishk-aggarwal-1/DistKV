@@ -13,9 +13,15 @@ namespace {
 void usage(const char* prog) {
   std::fprintf(stderr,
                "usage: %s [--port N] [--threads N] [--stripes N]\n"
-               "  --port     TCP port to listen on (default 6380)\n"
-               "  --threads  event-loop threads (default: hardware threads)\n"
-               "  --stripes  lock stripes in the store (default 256)\n",
+               "          [--cluster --node-id ID [--grpc-port N] [--advertise-host HOST]]\n"
+               "  --port            TCP port for clients (default 6380)\n"
+               "  --threads         event-loop threads (default: hardware threads)\n"
+               "  --stripes         lock stripes in the store (default 256)\n"
+               "  --cluster         run as a cluster node controlled by a coordinator\n"
+               "  --node-id         unique node id (cluster mode)\n"
+               "  --grpc-port       port for the internal gRPC service (default: port + 10000)\n"
+               "  --advertise-host  address clients and peers use to reach this node\n"
+               "                    (default 127.0.0.1)\n",
                prog);
 }
 
@@ -29,12 +35,30 @@ bool parseNumber(const char* text, unsigned long& value) {
 }
 
 bool parseArgs(int argc, char** argv, kv::ServerConfig& config) {
+  bool grpc_port_set = false;
   for (int i = 1; i < argc; ++i) {
     std::string flag = argv[i];
+    if (flag == "--cluster") {
+      config.cluster = true;
+      continue;
+    }
+    if (i + 1 >= argc) return false;
+    const char* arg = argv[++i];
+    if (flag == "--node-id") {
+      config.node_id = arg;
+      continue;
+    }
+    if (flag == "--advertise-host") {
+      config.advertise_host = arg;
+      continue;
+    }
     unsigned long value = 0;
-    if (i + 1 >= argc || !parseNumber(argv[++i], value)) return false;
+    if (!parseNumber(arg, value)) return false;
     if (flag == "--port" && value <= 65535) {
       config.port = static_cast<uint16_t>(value);
+    } else if (flag == "--grpc-port" && value <= 65535) {
+      config.grpc_port = static_cast<uint16_t>(value);
+      grpc_port_set = true;
     } else if (flag == "--threads") {
       config.threads = static_cast<unsigned>(value);
     } else if (flag == "--stripes" && value > 0) {
@@ -42,6 +66,11 @@ bool parseArgs(int argc, char** argv, kv::ServerConfig& config) {
     } else {
       return false;
     }
+  }
+  if (config.cluster && config.node_id.empty()) return false;
+  if (config.cluster && !grpc_port_set) {
+    if (config.port == 0 || config.port > 55535) return false;
+    config.grpc_port = static_cast<uint16_t>(config.port + 10000);
   }
   return true;
 }
@@ -68,6 +97,9 @@ int main(int argc, char** argv) {
     kv::Server server(config);
     server.start();
     std::printf("distkv listening on port %u\n", server.port());
+    if (config.cluster) {
+      std::printf("cluster node %s, gRPC on port %u\n", config.node_id.c_str(), server.grpcPort());
+    }
     std::fflush(stdout);
 
     int sig = 0;

@@ -9,8 +9,15 @@
 
 namespace kv::net {
 
+// Per-connection protocol state that outlives a single command.
+struct Session {
+  // Set by ASKING; applies to the next command only (Redis Cluster semantics).
+  bool asking = false;
+};
+
 // Executes one command and appends its RESP reply to `out`.
-using CommandHandlerFn = std::function<void(const resp::Command& cmd, std::string& out)>;
+using CommandHandlerFn =
+    std::function<void(const resp::Command& cmd, Session& session, std::string& out)>;
 
 // One client connection. Owned by, and only ever touched from, a single
 // event-loop thread, so it needs no locking.
@@ -60,6 +67,7 @@ class Connection {
 
   int fd_;
   const CommandHandlerFn& handler_;
+  Session session_;
   resp::Parser parser_;
   std::string in_;         // received bytes not yet consumed by the parser
   std::string out_;        // replies not yet fully sent
