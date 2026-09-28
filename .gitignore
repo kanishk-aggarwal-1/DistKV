@@ -22,6 +22,7 @@ Thumbs.db
 # Terraform (Phase 4): state and provider caches must never be committed;
 # deploy/.generated holds the cluster SSH key and the inventory.
 /deploy/.generated/
+/deploy/.generated-local/
 .terraform/
 *.tfstate
 *.tfstate.*

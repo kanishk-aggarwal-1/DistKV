@@ -57,4 +57,4 @@ jobs:
           terraform -chdir=deploy/terraform test
 
       - name: Shellcheck
-        run: shellcheck -x deploy/scripts/*.sh scripts/*.sh tests/integration/*.sh bench/*.sh
+        run: shellcheck -x deploy/scripts/*.sh deploy/local/*.sh scripts/*.sh tests/integration/*.sh bench/*.sh
