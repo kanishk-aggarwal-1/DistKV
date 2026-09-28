@@ -1,0 +1,33 @@
+Json file bench/results/phase1-local/kvstore-4t-p1-r2.json created...
+Writing results to stdout
+[RUN #1] Preparing benchmark client...
+[RUN #1] Launching threads now...
+[RUN #1 5%,   1 secs]  4 threads 25 conns:      173362 ops,  170773 (avg:  170773) ops/sec, 11.78MB/sec (avg: 11.78MB/sec),  0.58 (avg:  0.58) msec latency[RUN #1 10%,   2 secs]  4 threads 25 conns:      318881 ops,  140768 (avg:  155635) ops/sec, 9.71MB/sec (avg: 10.74MB/sec),  0.72 (avg:  0.64) msec latency
+warning: high CPU on thread 3: 95.9% of a core (threshold 95.0%) - results may be unreliable
+[RUN #1 15%,   3 secs]  4 threads 25 conns:      469232 ops,  149210 (avg:  153517) ops/sec, 10.29MB/sec (avg: 10.59MB/sec),  0.67 (avg:  0.65) msec latency[RUN #1 20%,   4 secs]  4 threads 25 conns:      632030 ops,  162648 (avg:  155769) ops/sec, 11.22MB/sec (avg: 10.75MB/sec),  0.61 (avg:  0.64) msec latency
+warning: high CPU on thread 1: 95.5% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 2: 96.3% of a core (threshold 95.0%) - results may be unreliable
+[RUN #1 25%,   5 secs]  4 threads 25 conns:      788779 ops,  155831 (avg:  155782) ops/sec, 10.75MB/sec (avg: 10.75MB/sec),  0.64 (avg:  0.64) msec latency[RUN #1 30%,   6 secs]  4 threads 25 conns:      919712 ops,  128546 (avg:  151220) ops/sec, 8.87MB/sec (avg: 10.43MB/sec),  0.77 (avg:  0.66) msec latency[RUN #1 35%,   7 secs]  4 threads 25 conns:     1025425 ops,  104986 (avg:  144653) ops/sec, 7.24MB/sec (avg: 9.98MB/sec),  0.96 (avg:  0.69) msec latency[RUN #1 40%,   8 secs]  4 threads 25 conns:     1172908 ops,  146675 (avg:  144904) ops/sec, 10.12MB/sec (avg: 10.00MB/sec),  0.68 (avg:  0.69) msec latency[RUN #1 46%,   9 secs]  4 threads 25 conns:     1304686 ops,  131033 (avg:  143371) ops/sec, 9.04MB/sec (avg: 9.89MB/sec),  0.76 (avg:  0.70) msec latency[RUN #1 51%,  10 secs]  4 threads 25 conns:     1428546 ops,  122478 (avg:  141282) ops/sec, 8.45MB/sec (avg: 9.75MB/sec),  0.82 (avg:  0.71) msec latency[RUN #1 56%,  11 secs]  4 threads 25 conns:     1533114 ops,  103709 (avg:  137875) ops/sec, 7.16MB/sec (avg: 9.51MB/sec),  0.96 (avg:  0.72) msec latency[RUN #1 61%,  12 secs]  4 threads 25 conns:     1631005 ops,   97345 (avg:  134513) ops/sec, 6.72MB/sec (avg: 9.28MB/sec),  1.02 (avg:  0.74) msec latency[RUN #1 66%,  13 secs]  4 threads 25 conns:     1740436 ops,  108288 (avg:  132496) ops/sec, 7.47MB/sec (avg: 9.14MB/sec),  0.90 (avg:  0.75) msec latency[RUN #1 71%,  14 secs]  4 threads 25 conns:     1853526 ops,  108220 (avg:  130707) ops/sec, 7.47MB/sec (avg: 9.02MB/sec),  0.94 (avg:  0.76) msec latency[RUN #1 76%,  15 secs]  4 threads 25 conns:     1949606 ops,   94360 (avg:  128272) ops/sec, 6.51MB/sec (avg: 8.85MB/sec),  1.05 (avg:  0.78) msec latency[RUN #1 81%,  16 secs]  4 threads 25 conns:     2046132 ops,   94341 (avg:  126132) ops/sec, 6.51MB/sec (avg: 8.70MB/sec),  1.06 (avg:  0.79) msec latency[RUN #1 86%,  17 secs]  4 threads 25 conns:     2111733 ops,   64418 (avg:  122487) ops/sec, 4.44MB/sec (avg: 8.45MB/sec),  1.50 (avg:  0.81) msec latency[RUN #1 92%,  18 secs]  4 threads 25 conns:     2178618 ops,   60700 (avg:  118775) ops/sec, 4.19MB/sec (avg: 8.19MB/sec),  1.69 (avg:  0.84) msec latency[RUN #1 97%,  19 secs]  4 threads 25 conns:     2299165 ops,  116644 (avg:  118661) ops/sec, 8.05MB/sec (avg: 8.19MB/sec),  0.86 (avg:  0.84) msec latency[RUN #1 100%,  20 secs]  0 threads 25 conns:     2346930 ops,  116644 (avg:  117272) ops/sec, 8.05MB/sec (avg: 8.09MB/sec),  0.86 (avg:  0.85) msec latency
+
+
+CPU Utilization Summary
+  Total CPU time:   69.894s  (user 19.332s, sys 50.561s)
+  Wall time:        20.038s
+  Cores used:       3.488   (avg 87.2% across 4 worker threads)
+  Peak utilization: 379.9%
+Saving JSON output file: bench/results/phase1-local/kvstore-4t-p1-r2.json
+Json file closed.
+4         Threads
+25        Connections per thread
+20        Seconds
+
+
+ALL STATS
+============================================================================================================================
+Type         Ops/sec     Hits/sec   Misses/sec    Avg. Latency     p50 Latency     p99 Latency   p99.9 Latency       KB/sec 
+----------------------------------------------------------------------------------------------------------------------------
+Sets        10661.94          ---          ---         0.85375         0.43900        10.17500        27.26300       800.58 
+Gets       106592.60    106592.60         0.00         0.85076         0.43900        10.04700        27.77500      7483.26 
+Waits           0.00          ---          ---             ---             ---             ---             ---          --- 
+Totals     117254.54    106592.60         0.00         0.85103         0.43900        10.04700        27.77500      8283.84 

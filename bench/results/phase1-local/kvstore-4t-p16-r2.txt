@@ -1,0 +1,38 @@
+Json file bench/results/phase1-local/kvstore-4t-p16-r2.json created...
+Writing results to stdout
+[RUN #1] Preparing benchmark client...
+[RUN #1] Launching threads now...
+[RUN #1 5%,   1 secs]  4 threads 25 conns:     1447990 ops, 1446391 (avg: 1446391) ops/sec, 99.79MB/sec (avg: 99.79MB/sec),  1.10 (avg:  1.10) msec latency
+warning: high CPU on thread 0: 99.3% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 1: 99.4% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 2: 99.1% of a core (threshold 95.0%) - results may be unreliable
+
+warning: high CPU on thread 3: 99.5% of a core (threshold 95.0%) - results may be unreliable
+[RUN #1 10%,   2 secs]  4 threads 25 conns:     2742912 ops, 1283426 (avg: 1364590) ops/sec, 88.55MB/sec (avg: 94.15MB/sec),  1.23 (avg:  1.16) msec latency[RUN #1 15%,   3 secs]  4 threads 25 conns:     4063968 ops, 1317661 (avg: 1348973) ops/sec, 90.91MB/sec (avg: 93.07MB/sec),  1.21 (avg:  1.18) msec latency[RUN #1 20%,   4 secs]  4 threads 25 conns:     5357168 ops, 1292268 (avg: 1334833) ops/sec, 89.16MB/sec (avg: 92.09MB/sec),  1.23 (avg:  1.19) msec latency[RUN #1 25%,   5 secs]  4 threads 25 conns:     6276272 ops,  918030 (avg: 1251617) ops/sec, 63.34MB/sec (avg: 86.35MB/sec),  1.73 (avg:  1.27) msec latency[RUN #1 30%,   6 secs]  4 threads 25 conns:     7248256 ops,  970356 (avg: 1204788) ops/sec, 66.95MB/sec (avg: 83.12MB/sec),  1.64 (avg:  1.32) msec latency[RUN #1 35%,   7 secs]  4 threads 25 conns:     8231104 ops,  978516 (avg: 1172416) ops/sec, 67.51MB/sec (avg: 80.89MB/sec),  1.62 (avg:  1.35) msec latency[RUN #1 40%,   8 secs]  4 threads 25 conns:     9541824 ops, 1301573 (avg: 1188618) ops/sec, 89.80MB/sec (avg: 82.01MB/sec),  1.21 (avg:  1.33) msec latency[RUN #1 45%,   9 secs]  4 threads 25 conns:    10608736 ops, 1051095 (avg: 1173181) ops/sec, 72.52MB/sec (avg: 80.94MB/sec),  1.52 (avg:  1.35) msec latency[RUN #1 50%,  10 secs]  4 threads 25 conns:    11922756 ops, 1310472 (avg: 1186885) ops/sec, 90.41MB/sec (avg: 81.89MB/sec),  1.21 (avg:  1.34) msec latency[RUN #1 55%,  11 secs]  4 threads 25 conns:    13333123 ops, 1408028 (avg: 1206936) ops/sec, 97.14MB/sec (avg: 83.27MB/sec),  1.13 (avg:  1.31) msec latency[RUN #1 60%,  12 secs]  4 threads 25 conns:    14360816 ops, 1026513 (avg: 1191944) ops/sec, 70.82MB/sec (avg: 82.23MB/sec),  1.55 (avg:  1.33) msec latency[RUN #1 65%,  13 secs]  4 threads 25 conns:    15686082 ops, 1324192 (avg: 1202087) ops/sec, 91.36MB/sec (avg: 82.93MB/sec),  1.19 (avg:  1.32) msec latency[RUN #1 71%,  14 secs]  4 threads 25 conns:    16691061 ops,  953168 (avg: 1183478) ops/sec, 65.76MB/sec (avg: 81.65MB/sec),  1.67 (avg:  1.34) msec latency[RUN #1 76%,  15 secs]  4 threads 25 conns:    17833328 ops, 1139382 (avg: 1180552) ops/sec, 78.61MB/sec (avg: 81.45MB/sec),  1.39 (avg:  1.34) msec latency[RUN #1 81%,  16 secs]  4 threads 25 conns:    18894650 ops, 1056663 (avg: 1172828) ops/sec, 72.90MB/sec (avg: 80.92MB/sec),  1.50 (avg:  1.35) msec latency[RUN #1 86%,  17 secs]  4 threads 25 conns:    20068532 ops, 1171683 (avg: 1172761) ops/sec, 80.84MB/sec (avg: 80.91MB/sec),  1.35 (avg:  1.35) msec latency[RUN #1 91%,  18 secs]  4 threads 25 conns:    21441633 ops, 1371047 (avg: 1183724) ops/sec, 94.59MB/sec (avg: 81.67MB/sec),  1.16 (avg:  1.34) msec latency[RUN #1 96%,  19 secs]  4 threads 25 conns:    22798069 ops, 1354804 (avg: 1192685) ops/sec, 93.47MB/sec (avg: 82.29MB/sec),  1.17 (avg:  1.33) msec latency[RUN #1 100%,  20 secs]  0 threads 25 conns:    23861904 ops, 1354804 (avg: 1192778) ops/sec, 93.47MB/sec (avg: 82.29MB/sec),  1.17 (avg:  1.33) msec latency
+
+
+CPU Utilization Summary
+  Total CPU time:   76.135s  (user 47.124s, sys 29.011s)
+  Wall time:        20.013s
+  Cores used:       3.804   (avg 95.1% across 4 worker threads)
+  Peak utilization: 397.2%
+warning: thread 0 averaged 95.3% of a core over the run (threshold 95.0%) - memtier may be the bottleneck; results may be unreliable
+warning: thread 1 averaged 95.0% of a core over the run (threshold 95.0%) - memtier may be the bottleneck; results may be unreliable
+warning: thread 3 averaged 95.2% of a core over the run (threshold 95.0%) - memtier may be the bottleneck; results may be unreliable
+Saving JSON output file: bench/results/phase1-local/kvstore-4t-p16-r2.json
+Json file closed.
+4         Threads
+25        Connections per thread
+20        Seconds
+
+
+ALL STATS
+============================================================================================================================
+Type         Ops/sec     Hits/sec   Misses/sec    Avg. Latency     p50 Latency     p99 Latency   p99.9 Latency       KB/sec 
+----------------------------------------------------------------------------------------------------------------------------
+Sets       108438.83          ---          ---         1.33131         1.03100         6.75100        17.66300      8142.35 
+Gets      1084364.13   1084364.13         0.00         1.33099         1.03100         6.75100        17.53500     76126.69 
+Waits           0.00          ---          ---             ---             ---             ---             ---          --- 
+Totals    1192802.96   1084364.13         0.00         1.33102         1.03100         6.75100        17.53500     84269.04 
