@@ -14,6 +14,7 @@ add_executable(unit_tests
   unit/store_test.cpp
   unit/slot_test.cpp
   unit/hash_ring_test.cpp
+  unit/replication_test.cpp
 )
 target_link_libraries(unit_tests PRIVATE distkv_core GTest::gtest_main)
 # PRE_TEST: list tests when ctest runs, not at build time, so that the TSan

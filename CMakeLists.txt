@@ -64,6 +64,9 @@ add_library(distkv_core STATIC
   src/cluster/cluster_state.cpp
   src/cluster/rpc.cpp
   src/cluster/node_service.cpp
+  src/replication/replication_log.cpp
+  src/replication/ops_proto.cpp
+  src/replication/replicator.cpp
   src/coordinator/coordinator.cpp
   src/server/command_handler.cpp
   src/server/server.cpp

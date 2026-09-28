@@ -13,7 +13,8 @@ namespace {
 void usage(const char* prog) {
   std::fprintf(stderr,
                "usage: %s [--port N] [--threads N] [--stripes N]\n"
-               "          [--cluster --node-id ID [--grpc-port N] [--advertise-host HOST]]\n"
+               "          [--cluster --node-id ID [--grpc-port N] [--advertise-host HOST]\n"
+               "           [--replication-timeout-ms N]]\n"
                "  --port            TCP port for clients (default 6380)\n"
                "  --threads         event-loop threads (default: hardware threads)\n"
                "  --stripes         lock stripes in the store (default 256)\n"
@@ -21,7 +22,9 @@ void usage(const char* prog) {
                "  --node-id         unique node id (cluster mode)\n"
                "  --grpc-port       port for the internal gRPC service (default: port + 10000)\n"
                "  --advertise-host  address clients and peers use to reach this node\n"
-               "                    (default 127.0.0.1)\n",
+               "                    (default 127.0.0.1)\n"
+               "  --replication-timeout-ms  give up on a backup that does not acknowledge\n"
+               "                    a write within this time (default 2000)\n",
                prog);
 }
 
@@ -63,6 +66,8 @@ bool parseArgs(int argc, char** argv, kv::ServerConfig& config) {
       config.threads = static_cast<unsigned>(value);
     } else if (flag == "--stripes" && value > 0) {
       config.stripes = value;
+    } else if (flag == "--replication-timeout-ms" && value > 0) {
+      config.replication_ack_timeout = std::chrono::milliseconds(value);
     } else {
       return false;
     }

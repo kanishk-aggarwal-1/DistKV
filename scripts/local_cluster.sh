@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
-# Runs a local DistKV cluster on 127.0.0.1: one coordinator plus N nodes.
+# Runs a local DistKV cluster on 127.0.0.1: one coordinator plus replication
+# groups (a primary and a backup each) and optional spares.
 #
-#   scripts/local_cluster.sh start [N]     start a coordinator and nodes 1..N (default 3)
-#   scripts/local_cluster.sh add I         start node I and add it to the cluster
-#   scripts/local_cluster.sh remove I      migrate node I's slots away, then stop it
-#   scripts/local_cluster.sh show          print the cluster map
-#   scripts/local_cluster.sh stop          stop everything
+#   scripts/local_cluster.sh start [G] [S]   coordinator, G groups (default 3), S spares (default 1)
+#   scripts/local_cluster.sh add-group       start two more nodes and add them as a group
+#   scripts/local_cluster.sh add-spare       start one more node as a spare
+#   scripts/local_cluster.sh remove-group ID migrate group ID's slots away, then stop its nodes
+#   scripts/local_cluster.sh kill I          SIGKILL node I (failure testing)
+#   scripts/local_cluster.sh show            print the cluster map
+#   scripts/local_cluster.sh stop            stop everything
 #
-# Node I listens for clients on BASE_PORT+I and for gRPC on BASE_PORT+I+10000.
+# Nodes are numbered 1, 2, 3, ... in start order; group g gets nodes 2g-1
+# (primary) and 2g (backup). Node I listens for clients on BASE_PORT+I and
+# for gRPC on BASE_PORT+I+10000.
 # Environment: BIN_DIR (default build/release), BASE_PORT (default 7000),
 #              RUN_DIR (default /tmp/distkv-cluster), THREADS (default 2).
 set -euo pipefail
@@ -35,21 +40,41 @@ wait_until() {  # wait_until DESCRIPTION PID COMMAND...
   exit 1
 }
 
-start_node() {
+next_node() {  # prints the next unused node number
+  local i=1
+  while [[ -f "$RUN_DIR/n$i.pid" || -f "$RUN_DIR/n$i.log" ]]; do i=$((i + 1)); done
+  echo "$i"
+}
+
+start_node() {  # start_node I: starts node I and waits until it answers
   local i=$1 port=$((BASE_PORT + $1))
   "$BIN_DIR/distkv-server" --cluster --node-id "n$i" --port "$port" \
     --grpc-port $((port + 10000)) --threads "$THREADS" > "$RUN_DIR/n$i.log" 2>&1 &
   echo $! > "$RUN_DIR/n$i.pid"
   wait_until "node n$i" "$!" redis-cli -p "$port" PING
-  admin add-node "127.0.0.1:$((port + 10000))"
+}
+
+grpc_addr() { echo "127.0.0.1:$((BASE_PORT + $1 + 10000))"; }
+
+add_group() {
+  local p b
+  p=$(next_node); start_node "$p"
+  b=$(next_node); start_node "$b"
+  admin add-group "$(grpc_addr "$p")" "$(grpc_addr "$b")"
+}
+
+add_spare() {
+  local s
+  s=$(next_node); start_node "$s"
+  admin add-spare "$(grpc_addr "$s")"
 }
 
 stop_pid_file() {
-  local file=$1
+  local file=$1 signal=${2:-TERM}
   [[ -f "$file" ]] || return 0
   local pid
   pid=$(cat "$file")
-  kill "$pid" 2>/dev/null || true
+  kill "-$signal" "$pid" 2>/dev/null || true
   # Wait for the process to exit so ports are free for the next run.
   for _ in $(seq 50); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
   rm -f "$file"
@@ -57,30 +82,41 @@ stop_pid_file() {
 
 case "${1:-}" in
   start)
-    count=${2:-3}
+    groups=${2:-3}
+    spares=${3:-1}
     mkdir -p "$RUN_DIR"
+    rm -f "$RUN_DIR"/*.log
     "$BIN_DIR/distkv-coordinator" --port "$COORD_PORT" > "$RUN_DIR/coordinator.log" 2>&1 &
     echo $! > "$RUN_DIR/coordinator.pid"
     wait_until "coordinator" "$!" admin show
-    for i in $(seq "$count"); do start_node "$i"; done
+    for _ in $(seq "$groups"); do add_group > /dev/null; done
+    for _ in $(seq "$spares"); do add_spare > /dev/null; done
     admin show
     ;;
-  add)
-    start_node "${2:?node number}"
+  add-group)
+    add_group
     ;;
-  remove)
-    admin remove-node "n${2:?node number}"
-    stop_pid_file "$RUN_DIR/n$2.pid"
+  add-spare)
+    add_spare
+    ;;
+  remove-group)
+    group=${2:?group id}
+    members=$(admin show | awk -v g="$group" '$1 == g { print $3, $4 }')
+    admin remove-group "$group"
+    for id in $members; do stop_pid_file "$RUN_DIR/$id.pid"; done
+    ;;
+  kill)
+    stop_pid_file "$RUN_DIR/n${2:?node number}.pid" KILL
     ;;
   show)
     admin show
     ;;
   stop)
-    for file in "$RUN_DIR"/n*.pid; do stop_pid_file "$file"; done
     stop_pid_file "$RUN_DIR/coordinator.pid"
+    for file in "$RUN_DIR"/n*.pid; do stop_pid_file "$file"; done
     ;;
   *)
-    sed -n '2,12p' "$0"
+    sed -n '2,16p' "$0"
     exit 2
     ;;
 esac

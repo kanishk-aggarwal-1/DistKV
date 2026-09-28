@@ -153,24 +153,54 @@ class RespClient {
 //   MOVED slot addr  -> remember the new owner of the slot and retry there
 //   ASK slot addr    -> send ASKING + the command to addr, once
 //   TRYAGAIN         -> wait briefly and retry
+// and survives node failures:
+//   cannot connect   -> nothing was sent: refresh the slot table from any
+//                       seed and retry
+//   connection lost after sending -> the outcome is unknown: returned as a
+//                       reply of type kAmbiguous, never retried (retrying a
+//                       DEL could report a wrong count)
 class ClusterClient {
  public:
-  explicit ClusterClient(std::string seed_addr) : seed_(std::move(seed_addr)) { refreshSlots(); }
+  static constexpr char kAmbiguous = '?';
+
+  explicit ClusterClient(std::string seed_addr) : seeds_{std::move(seed_addr)} { refreshSlots(); }
+  explicit ClusterClient(std::vector<std::string> seeds) : seeds_(std::move(seeds)) {
+    refreshSlots();
+  }
 
   Reply execute(const std::vector<std::string>& args) {
     const uint16_t slot = cluster::keySlot(args.at(1));
-    std::string addr = slot_addr_[slot].empty() ? seed_ : slot_addr_[slot];
+    std::string addr = slot_addr_[slot].empty() ? seeds_.front() : slot_addr_[slot];
     bool asking = false;
-    for (int attempt = 0; attempt < 1000; ++attempt) {
-      RespClient& conn = connection(addr);
+    for (int attempt = 0; attempt < 5000; ++attempt) {
+      RespClient* conn = nullptr;
+      try {
+        conn = &connection(addr);
+      } catch (const std::exception&) {
+        // Could not connect: the node is down. Nothing was sent.
+        ++connect_failures;
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        refreshSlots();
+        addr = slot_addr_[slot].empty() ? seeds_.front() : slot_addr_[slot];
+        asking = false;
+        continue;
+      }
       Reply reply;
-      if (asking) {
-        conn.sendRaw(encodeCommand({"ASKING"}) + encodeCommand(args));
-        Reply ok = conn.readReply();
-        if (ok.isError()) throw std::runtime_error("ASKING failed: " + ok.str);
-        reply = conn.readReply();
-      } else {
-        reply = conn.command(args);
+      try {
+        if (asking) {
+          conn->sendRaw(encodeCommand({"ASKING"}) + encodeCommand(args));
+          Reply ok = conn->readReply();
+          if (ok.isError()) throw std::runtime_error("ASKING failed: " + ok.str);
+          reply = conn->readReply();
+        } else {
+          reply = conn->command(args);
+        }
+      } catch (const std::exception&) {
+        connections_.erase(addr);
+        Reply ambiguous;
+        ambiguous.type = kAmbiguous;
+        ambiguous.str = "connection to " + addr + " lost";
+        return ambiguous;
       }
       asking = false;
 
@@ -182,7 +212,7 @@ class ClusterClient {
         ++ask;
         addr = redirectAddress(reply.str);
         asking = true;
-      } else if (reply.isErrorWithPrefix("TRYAGAIN")) {
+      } else if (reply.isErrorWithPrefix("TRYAGAIN") || reply.isErrorWithPrefix("CLUSTERDOWN")) {
         ++tryagain;
         std::this_thread::sleep_for(std::chrono::microseconds(200));
       } else {
@@ -192,19 +222,28 @@ class ClusterClient {
     throw std::runtime_error("too many redirects for key " + args.at(1));
   }
 
+  // Rebuilds the slot table from the first seed that answers CLUSTER SLOTS.
   void refreshSlots() {
-    Reply slots = connection(seed_).command({"CLUSTER", "SLOTS"});
-    if (slots.type != '*') return;
-    for (const Reply& range : slots.elements) {
-      const Reply& node = range.elements.at(2);
-      std::string addr = node.elements.at(0).str + ":" + std::to_string(node.elements.at(1).integer);
-      for (int64_t s = range.elements.at(0).integer; s <= range.elements.at(1).integer; ++s) {
-        slot_addr_[static_cast<size_t>(s)] = addr;
+    for (const std::string& seed : seeds_) {
+      try {
+        Reply slots = connection(seed).command({"CLUSTER", "SLOTS"});
+        if (slots.type != '*') continue;
+        for (const Reply& range : slots.elements) {
+          const Reply& node = range.elements.at(2);
+          std::string addr =
+              node.elements.at(0).str + ":" + std::to_string(node.elements.at(1).integer);
+          for (int64_t s = range.elements.at(0).integer; s <= range.elements.at(1).integer; ++s) {
+            slot_addr_[static_cast<size_t>(s)] = addr;
+          }
+        }
+        return;
+      } catch (const std::exception&) {
+        connections_.erase(seed);
       }
     }
   }
 
-  uint64_t moved = 0, ask = 0, tryagain = 0;
+  uint64_t moved = 0, ask = 0, tryagain = 0, connect_failures = 0;
 
  private:
   static std::string redirectAddress(const std::string& error) {
@@ -213,11 +252,18 @@ class ClusterClient {
 
   RespClient& connection(const std::string& addr) {
     auto& conn = connections_[addr];
-    if (!conn) conn = std::make_unique<RespClient>(addr);
+    if (!conn) {
+      try {
+        conn = std::make_unique<RespClient>(addr);
+      } catch (...) {
+        connections_.erase(addr);
+        throw;
+      }
+    }
     return *conn;
   }
 
-  std::string seed_;
+  std::vector<std::string> seeds_;
   std::array<std::string, cluster::kNumSlots> slot_addr_;
   std::map<std::string, std::unique_ptr<RespClient>> connections_;
 };

@@ -73,6 +73,7 @@ class ClusterCommandTest : public ::testing::Test {
     cluster::ClusterMap map;
     map.epoch = 1;
     map.nodes = {{"me", "10.0.0.1:7001", "10.0.0.1:17001"}, {"other", "10.0.0.2:7002", "10.0.0.2:17002"}};
+    map.groups = {{"g1", "me", "", false}, {"g2", "other", "", false}};
     map.slot_owner.resize(cluster::kNumSlots);
     for (uint16_t s = 0; s < cluster::kNumSlots; ++s) {
       map.slot_owner[s] = s < 8192 ? 0 : 1;

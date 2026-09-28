@@ -454,14 +454,21 @@ earlier runs sometimes held the chosen port. Test ports are now kept below
   memory.** If it crashes mid-migration, slots stay MIGRATING/IMPORTING and
   there's no automatic resume. A failed `add-node` leaves the node in the map,
   and retrying returns `ALREADY_EXISTS`. Recovery is manual (Redis needs
-  `redis-cli --cluster fix` in the same situation). Phase 3 discusses this.
+  `redis-cli --cluster fix` in the same situation). *Still true after Phase 3
+  for a coordinator crash; see Phase 3's weaknesses.*
 - **A node that dies mid-migration stalls it.** In-flight keys on the source
   keep answering `TRYAGAIN` until the target is back. There's no abort path,
   on purpose: after the target has accepted `ASK` writes, rolling back would
   lose them. A dead node's data is lost until Phase 3 adds replicas.
+  *Resolved in Phase 3: the backup is promoted with the migration state, and
+  the reconciler finishes the rebalance.*
 - **Map pushes to nodes outside a migration are best effort.** A node that
   misses one keeps redirecting to the previous owner, which redirects again.
-  The next successful push brings it up to date.
+  The next successful push brings it up to date. *Phase 3: the heartbeat
+  monitor re-sends the map to any node that reports an older epoch.*
+- *Phase 3 replaced `add-node`/`remove-node` with `add-group`/`remove-group`/
+  `add-spare`; the Phase 2 text above describes the original single-node
+  membership.*
 - **Starting each migration batch scans the slot**, which is fine at thousands
   of keys per slot but not at millions.
 - **gRPC runs without TLS or authentication.** This assumes the cluster's
@@ -507,3 +514,301 @@ EC2 instances in Phase 5 before any conclusion.
 - a faster CRC16 (processing several bytes per step instead of one);
 - keeping one hash table per stripe and adding a slot → keys index only for
   migrating slots.
+
+---
+
+## Phase 3: Replication and failover
+
+### Architecture
+
+```
+                      distkv-coordinator
+          (map: groups, slot owners, spares; heartbeats every 100 ms;
+           failover; reconciler: spare assignment, backup sync, rebalance)
+                  │ Ping / ApplyClusterMap / StartReplication
+     ┌────────────┼──────────────────────────────┬───────────────┐
+     ▼            ▼                              ▼               ▼
+ ┌────────┐  Replicate (gRPC  ┌────────┐     ┌────────┐     ┌────────┐
+ │ n1     │  bidi stream,     │ n2     │     │ n3 ... │     │ n5     │
+ │primary │─────────────────► │ backup │     │        │     │ spare  │
+ │ of g1  │ ◄───────────────  │ of g1  │     │        │     │        │
+ └────────┘  cumulative acks  └────────┘     └────────┘     └────────┘
+```
+
+- **A group** is a primary plus a backup. The ring from Phase 2 now assigns
+  slots to *groups* rather than nodes.
+- **Primaries** serve clients. **Backups** serve no clients: they answer `MOVED`
+  and apply the primary's stream.
+- **Spares** wait to replace a failed backup.
+- **New code:** [src/replication/](../src/replication/),
+  the roles and the backup side of the stream in
+  [src/cluster/node_service.cpp](../src/cluster/node_service.cpp),
+  and failure handling in
+  [src/coordinator/coordinator.cpp](../src/coordinator/coordinator.cpp).
+
+### The write path
+
+1. An event loop runs `SET k v`. Under the slot's lock, the Store:
+   - checks that the node accepts writes (it's a primary with a synced backup);
+   - applies the write;
+   - appends `Put(k, v)` to the **replication log**, which assigns it a seq.
+2. The handler sets `Session::reply_seq = seq`. The connection keeps the
+   reply in its **held** queue. Later pipelined commands still run, but their
+   replies queue behind the held one.
+3. The **replicator** thread streams the log to the backup in order, over one
+   gRPC bidirectional stream.
+4. The backup applies each batch in order and acknowledges the highest seq it
+   has applied ("everything up to N").
+5. The ack advances the shared `Progress`. That wakes every event loop through
+   its **mailbox** (an `eventfd`), and each loop releases the held replies
+   that are now acknowledged, in request order.
+
+Reads aren't replicated. They're served straight from the primary's memory.
+
+### Decisions
+
+**1. Where backups live: a dedicated backup node per group** *(chosen)*
+- Alternative: chained backups, where each node backs up its neighbour's slots.
+  That leaves no hardware idle, but each node holds two kinds of data, and
+  rebalancing would also have to move backup data.
+- Dedicated pairs are Redis Cluster's model and the simplest to reason about.
+- **Cost:** half the nodes do no client work.
+- For Phase 4, six nodes means three groups, with each primary and backup in
+  different availability zones.
+
+**2. Transport: one ordered gRPC stream per group, with cumulative acks** *(chosen)*
+- Alternative: one unary RPC per write. That pays per-call overhead on every
+  write, and the backup would have to reorder concurrent calls anyway.
+- **How order is guaranteed:** the seq is assigned under the slot's lock at
+  the moment the write is applied. So the log's order for any slot is the
+  order its writes were applied, which is the only order that matters.
+  Different slots hold different keys, so their writes can be applied in any
+  order.
+- **Cost:** a single log mutex is taken on every write, making it a
+  serialisation point across event-loop threads. Its critical section is a
+  queue append.
+
+**3. Replies while the ack is pending: hold them in order, keep executing** *(chosen)*
+- Alternative: pause the connection until the ack arrives. That makes a
+  pipelined client pay a full round trip per write.
+- **Cost:** a later reply on the same connection can't be sent before an
+  earlier write's ack, even if it's a read.
+- `PipelinedWritesKeepTheirReplyOrder` interleaves 500 SET/GET/PING triples
+  and checks the order.
+
+**4. Strict writes: no single-copy writes** *(chosen)*
+- A primary without a *synced* backup refuses writes with
+  `-NOREPLICAS Not enough good replicas to write`, as Redis does with
+  `min-replicas-to-write`. Reads are still served.
+- Alternative: degrade and let the primary acknowledge writes alone. That's
+  more available, but a write acknowledged in that window is lost if the
+  primary then dies, which contradicts the stated guarantee.
+- **Consequence I had to build for: a spare pool.**
+  - After a failover, the promoted node has no backup, so its group refuses
+    writes until a new backup is synced.
+  - Without automation that would last until an operator acted. So the
+    coordinator keeps **spares** (`distkv-admin add-spare`), and its
+    reconciler assigns one and runs the full sync.
+  - Without a spare, the group stays read-only until one is added.
+
+**5. Failure detection: the coordinator pings every node** *(chosen)*
+- A node is declared dead after `failure_timeout` of failed pings: 100 ms
+  interval, 1 s timeout, both configurable.
+- Pings go from the coordinator to the nodes, so nodes need no coordinator
+  address. Each reply carries the node's map epoch, and the coordinator
+  re-sends the map to any node behind the current epoch. That fixes the Phase 2
+  gap where best-effort map pushes could be missed.
+
+**6. Split-brain protection: epoch fencing, no leases** *(chosen)*
+- **The fence:** a backup applies a batch only if its *own* current map names
+  the sender as its group's primary. Once promoted, the backup refuses its old
+  primary (`FAILED_PRECONDITION`).
+- **Why that's enough for writes:** every write needs the backup's ack, so
+  after the promotion the old primary cannot acknowledge any more writes.
+  - When it's refused, its replicator gives up: waiting writes fail with
+    `NOREPLICAS`, it stops accepting writes, and it reports
+    `replication_broken` so the coordinator re-syncs.
+  - `PartitionedPrimaryCannotAcknowledgeWritesAfterPromotion` cuts a primary
+    off from the coordinator only, waits for the promotion, then checks that
+    writes to the old primary fail fast (3–5 ms after promotion, in 10 of 10
+    runs).
+- **Promotion is atomic with batch application:** the backup applies each
+  batch while holding a shared role lock, and a map change takes the lock
+  exclusively. A batch already in flight is therefore applied either entirely
+  before the promotion or not at all.
+- **Alternative: leases.** A primary would stop serving once its lease from the
+  coordinator expired, and the coordinator would wait out the lease before
+  promoting. That also stops **stale reads** on a cut-off primary, which this
+  design allows (see weaknesses). It costs failover time and relies on bounded
+  clock drift. I didn't build it, to keep scope down.
+- **Ack timeout (2 s):** if the backup doesn't acknowledge a write in time, for
+  example because the primary can reach the coordinator but not its backup,
+  the replicator gives up the same way. So a client never waits indefinitely.
+
+**7. Syncing a new backup: slot snapshots inside the replication stream** *(chosen)*
+- **How it works:** `StartReplication` starts a new log, then for each of the
+  16,384 slots takes the slot's lock and appends a `SlotSnapshot`. The backup
+  replaces the slot's contents with the snapshot.
+- **Why ordering is consistent:** every write to a slot gets its seq under the
+  same lock. So each earlier write is included in the snapshot, and each later
+  write comes after it in the stream.
+- **Alternatives:**
+  - stop the world: block writes during the whole copy;
+  - keep a version per key and merge snapshots with the stream.
+- **Windowing:** the sync waits for the backup's ack every 256 slots, so the
+  log never holds the whole dataset at once.
+- In practice, strict mode means no writes arrive during a sync anyway. The
+  scheme is correct either way, and the tests don't depend on that.
+
+### Migration + replication (Phase 2 meets Phase 3)
+
+A migration now writes on two groups, and either primary can fail halfway.
+Three rules keep it correct:
+
+- **The target acknowledges an `ImportKeys` batch only after its backup has
+  it.** The source deletes its copy as soon as the target says OK.
+- **The source logs its deletes of a migrated batch, waits for its own
+  backup's ack, and only then applies them.** Until then the keys stay frozen
+  and clients aren't sent to the target for them. So a promoted source backup
+  can never hold a stale copy of a key that clients have since changed on the
+  target.
+- **Slot migration state is replicated** (`SlotMigrating`, `SlotImporting` ops),
+  so a promoted backup keeps sending `ASK` for keys already moved.
+  - The source logs its "migrating" intent and waits for the backup before it
+    starts redirecting.
+  - Without this, a failover could leave the promoted source treating the slot
+    as normally owned, while some of its keys already live on the target.
+
+After a failover, the aborted rebalance leaves `needs_rebalance` set. The
+coordinator's reconciler then:
+- gives the group a spare and syncs it;
+- recomputes the moves from the ring;
+- re-arms each import under a **newer migration id**. A newer id replaces an
+  older import, and batches from the old one are then rejected.
+
+`Failover.PrimaryDiesDuringMigration` kills a source primary while a new group
+joins under load. It passed 6 of 6 runs, and every acknowledged write was
+intact. Where the kill lands varies:
+- during the post-commit map push to the dead node: 5 runs;
+- during `SetMigrating`: 1 run;
+- while keys were in flight inside `MigrateSlots`: never observed.
+
+That last case rests on the argument above and on the unit tests of the
+log-then-apply steps
+(`MigratedKeysAreDeletedOnlyAfterTheBackupHasTheDeletion`,
+`MigrationIntentIsLoggedBeforeTheStateChanges`), not on an integration run.
+
+### Bugs found along the way
+
+- **Fencing was really done by the 2 s timeout.** The replicator called
+  `TryCancel()` before `Finish()`, so the backup's `FAILED_PRECONDITION` came
+  back as `CANCELLED`. The replicator then kept reconnecting until the 2 s ack
+  timeout fired.
+  - The fencing test still passed, because it only checked that no write was
+    acknowledged. A log line gave it away.
+  - Fixed by cancelling only when the replicator itself is leaving. The test
+    now also asserts that fenced writes fail in under 1 s.
+- **Use-after-free in a test helper,** found by ASan: it held a pointer into a
+  temporary copy of the map.
+- **Found while designing, before coding:**
+  - A promoted source could forget a migration that was in progress. Fixed by
+    replicating the slot states.
+  - A write on a cut-off primary could hang forever waiting for an ack. Fixed
+    by the ack timeout.
+  - Strict writes needed automatic recovery. Fixed by the spare pool.
+
+### Measurements (laptop, in-process tests, debug build)
+
+These come from test runs, not a benchmark. The Phase 5 numbers on EC2 will
+replace them.
+
+- **Failover** (`Failover.PromotedBackupHasEveryAcknowledgedWrite`, 10 runs):
+  - writes to the failed group resumed **1,170–1,360 ms** after the primary
+    stopped;
+  - failure detection alone took 1,000–1,090 ms (the 1 s timeout plus up to
+    one heartbeat interval);
+  - the rest is promotion, the map push, assigning the spare, and the spare's
+    full sync, which took about 100 ms with a few thousand keys. The sync time
+    grows with the data size.
+- **Fencing:** writes to a cut-off old primary fail 3–5 ms after the promotion
+  (10 runs; one run took 23 ms).
+- **Cost of replication, in the Phase 2 migration test:** about 61k–64k
+  operations per run, against 124k–138k before replication. It's the same test
+  shape, but the test runs for a fixed number of operations around the
+  topology changes, not for a fixed time. So this is only a rough sign that
+  each write now waits for an extra network round trip, not a throughput
+  figure.
+
+### ThreadSanitizer: three failure tests excluded
+
+Killing or cutting off a node makes gRPC connect to dead peers. That produced
+8 new TSan reports.
+- **Where they happen:** `scripts/tsan_classify.sh` groups every racing access
+  by its first frame outside the standard library. All 16 accesses are inside
+  `libgrpc.so` (its executor threads and `ChannelArgs`), and none is in `src/`.
+- **Why they slip through the Phase 2 setting:** the `std::string` code
+  involved is compiled into our instrumented binary but called by gRPC, so
+  `ignore_noninstrumented_modules` doesn't cover it.
+- **Why not a suppressions file:**
+  - TSan matches suppressions against *every* frame, including the stacks where
+    threads were created. gRPC creates its executor threads and the server
+    threads that run our handlers the same way (`grpc_core::Thread`).
+  - So any rule that silences these reports would also silence real races in
+    our NodeService handlers.
+- **What I did instead:** the TSan test preset excludes the three tests that
+  inject failures: `Failover.*` and
+  `Replication.WritesAreRefusedWhileTheBackupIsNotSynced`.
+  - They still run under the debug and ASan builds.
+  - Replication streaming, held replies, and migration with replication all
+    stay covered under TSan.
+- **The proper fix is a TSan build of gRPC,** which Decision 4a traded away
+  for CI time.
+
+### Weaknesses, and what Raft would fix
+
+- **The coordinator is a single point of failure.**
+  - While it's down, nothing fails over, no spare is assigned, and membership
+    can't change. The data path keeps working.
+  - Its state is in memory only, so a restart forgets the cluster.
+  - *Raft fix:* replicate the coordinator itself (3 or 5 instances) and commit
+    every map change through the Raft log. A new leader continues with the same
+    map and the same epochs. etcd and ZooKeeper play this role in real systems.
+- **Unnecessary failovers when only the coordinator is cut off.** A healthy
+  primary that can't reach the coordinator still gets replaced.
+  - Fencing makes this safe: no split-brain writes.
+  - But it isn't free: a failover, a re-sync, and a window of refused writes.
+- **Stale reads from a cut-off primary.**
+  - Until it receives the new map or its replicator is refused, an old primary
+    keeps serving reads. Writes are fenced, reads aren't.
+  - *Fixes:* leases (Decision 6), or Raft's leader leases or ReadIndex for
+    linearizable reads.
+- **Dirty reads of unacknowledged writes.**
+  - The primary applies a write before the backup acknowledges it, so another
+    client can read a value whose write then fails. If the primary dies, that
+    value disappears, and the client that wrote it got an error reply.
+  - Redis has the same behaviour with `WAIT`. Fixing it would mean applying
+    writes only after the ack, which is more complex and makes reads of your
+    own writes slower.
+- **One backup means one failure per group.**
+  - Losing the primary before a new backup has synced loses the group:
+    the coordinator logs `group LOST` and its slots are unavailable.
+  - Any second failure within that window loses the group's data, since
+    everything is in memory and nothing is persisted.
+  - *Raft fix:* 3 replicas per shard, with a write committed once a majority
+    has it. That survives one failure *without* write downtime: the remaining
+    two are still a majority. Strict primary-backup has to stop writes until
+    the backup is replaced.
+- **Strict writes cost availability.** A group refuses writes from the moment
+  its backup fails until a spare is synced. Measured: about 1.2–1.4 s of
+  unavailability after a primary failure, most of it detection.
+- **Failure detection is a fixed timeout.** 1 s trades failover speed against
+  false positives on a slow network, which a flapping connection could
+  trigger. Phi-accrual detectors or Raft's randomized election timeouts adapt
+  better.
+- **Failed writes are ambiguous.** A reply of "not acknowledged; may or may not
+  have been applied", or a dropped connection, leaves the outcome unknown, as
+  with any networked store. The workload checker in the tests tracks both
+  possible states for such keys.
+- **A backup that falls behind is re-synced in full**, not caught up from a log
+  position. That's simple, but expensive for large datasets. Raft's log
+  matching plus snapshots would catch up incrementally.
