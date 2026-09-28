@@ -1,0 +1,27 @@
+Json file bench/results/phase1-local/kvstore-1t-p1-r1.json created...
+Writing results to stdout
+[RUN #1] Preparing benchmark client...
+[RUN #1] Launching threads now...
+[RUN #1 5%,   0 secs]  4 threads 25 conns:       82503 ops,   82646 (avg:   82646) ops/sec, 5.70MB/sec (avg: 5.70MB/sec), 4686.46 (avg: 4686.46) msec latency[RUN #1 10%,   1 secs]  4 threads 25 conns:      193870 ops,  111287 (avg:   96984) ops/sec, 7.68MB/sec (avg: 6.69MB/sec),  0.90 (avg: 1994.88) msec latency[RUN #1 15%,   3 secs]  4 threads 25 conns:      296538 ops,  102261 (avg:   98748) ops/sec, 7.06MB/sec (avg: 6.81MB/sec),  0.98 (avg: 1304.54) msec latency[RUN #1 20%,   4 secs]  4 threads 25 conns:      365639 ops,   69048 (avg:   91325) ops/sec, 4.76MB/sec (avg: 6.30MB/sec),  1.45 (avg: 1058.28) msec latency[RUN #1 25%,   5 secs]  4 threads 25 conns:      461473 ops,   95772 (avg:   92214) ops/sec, 6.61MB/sec (avg: 6.36MB/sec),  1.04 (avg: 838.72) msec latency[RUN #1 30%,   6 secs]  4 threads 25 conns:      519865 ops,   58252 (avg:   86546) ops/sec, 4.02MB/sec (avg: 5.97MB/sec),  1.72 (avg: 744.71) msec latency[RUN #1 35%,   7 secs]  4 threads 25 conns:      624060 ops,  103809 (avg:   89018) ops/sec, 7.16MB/sec (avg: 6.14MB/sec),  0.96 (avg: 620.53) msec latency[RUN #1 40%,   8 secs]  4 threads 25 conns:      726534 ops,  102410 (avg:   90691) ops/sec, 7.07MB/sec (avg: 6.26MB/sec),  0.98 (avg: 533.14) msec latency[RUN #1 45%,   9 secs]  4 threads 25 conns:      836451 ops,  109842 (avg:   92817) ops/sec, 7.58MB/sec (avg: 6.40MB/sec),  0.91 (avg: 463.20) msec latency[RUN #1 50%,  10 secs]  4 threads 25 conns:      898088 ops,   61450 (avg:   89676) ops/sec, 4.24MB/sec (avg: 6.19MB/sec),  1.63 (avg: 431.52) msec latency[RUN #1 55%,  11 secs]  4 threads 25 conns:      990394 ops,   92242 (avg:   89909) ops/sec, 6.36MB/sec (avg: 6.20MB/sec),  1.08 (avg: 391.41) msec latency[RUN #1 60%,  12 secs]  4 threads 25 conns:     1106507 ops,  116042 (avg:   92085) ops/sec, 8.01MB/sec (avg: 6.35MB/sec),  0.86 (avg: 350.42) msec latency[RUN #1 65%,  13 secs]  4 threads 25 conns:     1219857 ops,  113281 (avg:   93714) ops/sec, 7.82MB/sec (avg: 6.47MB/sec),  0.88 (avg: 317.94) msec latency[RUN #1 70%,  14 secs]  4 threads 25 conns:     1327431 ops,  107499 (avg:   94698) ops/sec, 7.42MB/sec (avg: 6.53MB/sec),  0.93 (avg: 292.25) msec latency[RUN #1 75%,  15 secs]  4 threads 25 conns:     1422020 ops,   94525 (avg:   94687) ops/sec, 6.52MB/sec (avg: 6.53MB/sec),  1.06 (avg: 272.88) msec latency[RUN #1 80%,  16 secs]  4 threads 25 conns:     1493244 ops,   71172 (avg:   93218) ops/sec, 4.91MB/sec (avg: 6.43MB/sec),  1.40 (avg: 259.94) msec latency[RUN #1 85%,  17 secs]  4 threads 25 conns:     1596825 ops,  103517 (avg:   93823) ops/sec, 7.14MB/sec (avg: 6.47MB/sec),  0.96 (avg: 243.14) msec latency[RUN #1 90%,  18 secs]  4 threads 25 conns:     1669041 ops,   72162 (avg:   92620) ops/sec, 4.98MB/sec (avg: 6.39MB/sec),  1.38 (avg: 232.68) msec latency[RUN #1 95%,  19 secs]  4 threads 25 conns:     1736390 ops,   67299 (avg:   91288) ops/sec, 4.64MB/sec (avg: 6.30MB/sec),  1.49 (avg: 223.71) msec latency[RUN #1 100%,  20 secs]  0 threads 25 conns:     1834513 ops,   67299 (avg:   91714) ops/sec, 4.64MB/sec (avg: 6.33MB/sec),  1.49 (avg: 211.80) msec latency
+
+
+CPU Utilization Summary
+  Total CPU time:   25.995s  (user 8.512s, sys 17.483s)
+  Wall time:        20.006s
+  Cores used:       1.299   (avg 32.5% across 4 worker threads)
+  Peak utilization: 143.4%
+Saving JSON output file: bench/results/phase1-local/kvstore-1t-p1-r1.json
+Json file closed.
+4         Threads
+25        Connections per thread
+20        Seconds
+
+
+ALL STATS
+============================================================================================================================
+Type         Ops/sec     Hits/sec   Misses/sec    Avg. Latency     p50 Latency     p99 Latency   p99.9 Latency       KB/sec 
+----------------------------------------------------------------------------------------------------------------------------
+Sets         8340.20          ---          ---        15.52204         0.98300         2.55900         3.74300       626.25 
+Gets        83377.78     83377.78         0.00        32.12767         0.98300         2.54300         3.69500      5853.47 
+Waits           0.00          ---          ---             ---             ---             ---             ---          --- 
+Totals      91717.99     83377.78         0.00        30.61767         0.98300         2.54300         3.69500      6479.72 

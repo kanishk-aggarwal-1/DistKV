@@ -1,0 +1,29 @@
+# Build output (CMake presets build into build/<preset>)
+/build/
+/out/
+CMakeUserPresets.json
+compile_commands.json
+
+# Editors and IDEs
+/.vscode/
+/.idea/
+/.vs/
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Scratch output from bench/run_local.sh when OUT is not set.
+# Curated results are committed under named directories (e.g. bench/results/phase1-local/).
+/bench/results/local-*/
+
+# Terraform (Phase 4): state and provider caches must never be committed
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl.bak
+crash.log
