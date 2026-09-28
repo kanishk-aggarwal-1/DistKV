@@ -14,9 +14,13 @@ namespace {
 void usage(const char* prog) {
   std::fprintf(stderr,
                "usage: %s [--port N] [--vnodes N] [--slots-per-step N]\n"
-               "  --port            gRPC port (default 9000)\n"
-               "  --vnodes          virtual nodes per node on the hash ring (default 128)\n"
-               "  --slots-per-step  slots migrated per step (default 256)\n",
+               "          [--heartbeat-ms N] [--failure-timeout-ms N]\n"
+               "  --port                gRPC port (default 9000)\n"
+               "  --vnodes              virtual nodes per group on the hash ring (default 128)\n"
+               "  --slots-per-step      slots migrated per step (default 256)\n"
+               "  --heartbeat-ms        how often every node is pinged (default 100)\n"
+               "  --failure-timeout-ms  silence after which a node is declared dead\n"
+               "                        (default 1000)\n",
                prog);
 }
 
@@ -46,6 +50,10 @@ int main(int argc, char** argv) {
       config.vnodes_per_node = value;
     } else if (flag == "--slots-per-step" && value > 0) {
       config.slots_per_step = value;
+    } else if (flag == "--heartbeat-ms" && value > 0) {
+      config.heartbeat_interval = std::chrono::milliseconds(value);
+    } else if (flag == "--failure-timeout-ms" && value > 0) {
+      config.failure_timeout = std::chrono::milliseconds(value);
     } else {
       usage(argv[0]);
       return 2;

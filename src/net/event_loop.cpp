@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <cstring>
 #include <system_error>
+#include <vector>
 
 #include "net/socket_utils.h"
 
@@ -29,22 +30,26 @@ void addToEpoll(int epoll_fd, int fd, uint32_t events) {
 
 }  // namespace
 
-EventLoop::EventLoop(int listen_fd, const CommandHandlerFn& handler)
+EventLoop::EventLoop(int listen_fd, const CommandHandlerFn& handler, const ReplyGate* gate)
     : epoll_fd_(::epoll_create1(EPOLL_CLOEXEC)),
       listen_fd_(listen_fd),
       wake_fd_(::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC)),
-      handler_(handler) {
-  if (epoll_fd_ < 0 || wake_fd_ < 0) {
+      progress_fd_(::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC)),
+      handler_(handler),
+      gate_(gate) {
+  if (epoll_fd_ < 0 || wake_fd_ < 0 || progress_fd_ < 0) {
     throw std::system_error(errno, std::generic_category(), "epoll_create1/eventfd");
   }
   addToEpoll(epoll_fd_, listen_fd_, EPOLLIN);
   addToEpoll(epoll_fd_, wake_fd_, EPOLLIN);
+  addToEpoll(epoll_fd_, progress_fd_, EPOLLIN);
 }
 
 EventLoop::~EventLoop() {
   connections_.clear();  // closes client sockets
   ::close(listen_fd_);
   ::close(wake_fd_);
+  ::close(progress_fd_);
   ::close(epoll_fd_);
 }
 
@@ -52,6 +57,28 @@ void EventLoop::stop() {
   uint64_t one = 1;
   // Can only fail if the counter would overflow, which cannot happen here.
   [[maybe_unused]] ssize_t n = ::write(wake_fd_, &one, sizeof(one));
+}
+
+void EventLoop::notifyReplicationProgress() {
+  uint64_t one = 1;
+  // eventfd counters add up, so many notifications before the loop wakes
+  // collapse into one wake-up.
+  [[maybe_unused]] ssize_t n = ::write(progress_fd_, &one, sizeof(one));
+}
+
+void EventLoop::onReplicationProgress() {
+  uint64_t count = 0;
+  [[maybe_unused]] ssize_t n = ::read(progress_fd_, &count, sizeof(count));
+  // Collect first: closing a connection while iterating would invalidate the map.
+  std::vector<int> to_close;
+  for (auto& [fd, conn] : connections_) {
+    if (conn->onReplicationProgress()) {
+      updateInterest(*conn);
+    } else {
+      to_close.push_back(fd);
+    }
+  }
+  for (int fd : to_close) closeConnection(fd);
 }
 
 void EventLoop::run() {
@@ -65,6 +92,10 @@ void EventLoop::run() {
     for (int i = 0; i < n; ++i) {
       int fd = events[i].data.fd;
       if (fd == wake_fd_) return;
+      if (fd == progress_fd_) {
+        onReplicationProgress();
+        continue;
+      }
       if (fd == listen_fd_) {
         acceptConnections();
       } else {
@@ -85,7 +116,7 @@ void EventLoop::acceptConnections() {
       return;
     }
     setNoDelay(fd);
-    auto conn = std::make_unique<Connection>(fd, handler_);
+    auto conn = std::make_unique<Connection>(fd, handler_, gate_);
     conn->registered_events = conn->wantedEvents();
     addToEpoll(epoll_fd_, fd, conn->registered_events);
     connections_.emplace(fd, std::move(conn));

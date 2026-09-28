@@ -12,15 +12,33 @@ message Node {
   string grpc_addr = 3;    // host:port for this protocol
 }
 
-// The authoritative assignment of slots to nodes, owned by the coordinator.
-// Every change increments the epoch; nodes ignore maps older than the one
-// they already have.
+// A replication group serves a share of the slots: a primary, which clients
+// talk to, and a backup that holds a synchronous copy.
+message Group {
+  string id = 1;
+  string primary = 2;     // node id
+  string backup = 3;      // node id; empty if the group has no backup
+  bool backup_ready = 4;  // the backup has a full copy and receives every write
+}
+
+// The authoritative cluster configuration, owned by the coordinator. Every
+// change increments the epoch; nodes ignore maps older than the one they
+// already have.
 message ClusterMap {
   uint64 epoch = 1;
-  repeated Node nodes = 2;
-  // 16384 entries: slot_owner[s] is an index into `nodes`. Empty before the
-  // first node joins.
-  repeated uint32 slot_owner = 3;
+  repeated Node nodes = 2;    // every live node: group members and spares
+  repeated Group groups = 3;
+  // 16384 entries: slot_owner[s] is an index into `groups`. Empty before the
+  // first group joins.
+  repeated uint32 slot_owner = 4;
+  repeated string spares = 5;  // ids of nodes waiting to become a backup
+}
+
+message PingReply {
+  uint64 epoch = 1;  // epoch of the node's cluster map
+  // A primary whose replication gave up (backup unresponsive or refusing):
+  // it accepts no writes until the coordinator re-syncs the backup.
+  bool replication_broken = 2;
 }
 
 message SlotMigration {
@@ -51,9 +69,54 @@ message ImportKeysRequest {
   repeated KeyValue entries = 4;
 }
 
+message StartReplicationRequest {
+  Node backup = 1;
+}
+
+// ---- Replication stream (primary -> backup) ----
+
+message ReplicationOp {
+  uint64 seq = 1;
+  oneof op {
+    KeyValue put = 2;
+    bytes del = 3;             // key
+    SlotSnapshot snapshot = 4;
+    SlotMigrating migrating = 5;
+    SlotImporting importing = 6;
+  }
+}
+
+message SlotSnapshot {
+  uint32 slot = 1;
+  repeated KeyValue entries = 2;
+}
+
+message SlotMigrating {
+  uint32 slot = 1;
+  string target_client_addr = 2;
+}
+
+message SlotImporting {
+  uint32 slot = 1;
+  uint64 migration_id = 2;
+}
+
+message ReplicationBatch {
+  string group_id = 1;
+  string primary_id = 2;  // checked against the backup's own cluster map
+  uint64 log_id = 3;      // a new log (and full sync) starts for every new backup
+  repeated ReplicationOp ops = 4;
+}
+
+message ReplicationAck {
+  uint64 applied_seq = 1;  // everything up to here is applied on the backup
+}
+
 // Served by every storage node.
 service NodeService {
   rpc GetNodeInfo(Empty) returns (Node);
+  // Heartbeat from the coordinator.
+  rpc Ping(Empty) returns (PingReply);
   rpc ApplyClusterMap(ClusterMap) returns (Empty);
   // Source side: start answering ASK for absent keys of these slots.
   rpc SetMigrating(SlotMigration) returns (Empty);
@@ -64,14 +127,24 @@ service NodeService {
   rpc MigrateSlots(MigrateSlotsRequest) returns (MigrateSlotsResponse);
   // Target side: one batch of keys from the source.
   rpc ImportKeys(ImportKeysRequest) returns (Empty);
+  // Primary side: send a full copy to the (newly assigned) backup. Returns
+  // once the backup has acknowledged all of it.
+  rpc StartReplication(StartReplicationRequest) returns (Empty);
+  // Backup side: the primary's ordered stream of changes.
+  rpc Replicate(stream ReplicationBatch) returns (stream ReplicationAck);
 }
 
-message AddNodeRequest {
-  string grpc_addr = 1;  // the coordinator asks the node for its details
+message AddGroupRequest {
+  string primary_grpc_addr = 1;
+  string backup_grpc_addr = 2;
 }
 
-message RemoveNodeRequest {
+message RemoveGroupRequest {
   string id = 1;
+}
+
+message AddSpareRequest {
+  string grpc_addr = 1;
 }
 
 message MembershipChange {
@@ -82,7 +155,10 @@ message MembershipChange {
 
 // Served by the coordinator.
 service CoordinatorService {
-  rpc AddNode(AddNodeRequest) returns (MembershipChange);
-  rpc RemoveNode(RemoveNodeRequest) returns (MembershipChange);
+  rpc AddGroup(AddGroupRequest) returns (MembershipChange);
+  rpc RemoveGroup(RemoveGroupRequest) returns (MembershipChange);
+  rpc AddSpare(AddSpareRequest) returns (MembershipChange);
+  // Moves slots to match the hash ring (e.g. to finish an interrupted change).
+  rpc Rebalance(Empty) returns (MembershipChange);
   rpc GetClusterMap(Empty) returns (ClusterMap);
 }

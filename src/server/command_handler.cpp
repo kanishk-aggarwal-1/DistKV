@@ -52,10 +52,10 @@ void CommandHandler::execute(const resp::Command& cmd, net::Session& session, st
     // SET options (EX, NX, ...) are out of scope.
     if (argc < 3) return appendArityError(out, "set");
     if (argc > 3) return resp::appendError(out, "ERR syntax error");
-    set(cmd, asking, out);
+    set(cmd, asking, session, out);
   } else if (isCommand(name, "del")) {
     if (argc < 2) return appendArityError(out, "del");
-    del(cmd, asking, out);
+    del(cmd, asking, session, out);
   } else if (isCommand(name, "asking")) {
     if (argc != 1) return appendArityError(out, "asking");
     session.asking = true;
@@ -79,13 +79,18 @@ void CommandHandler::get(const resp::Command& cmd, bool asking, std::string& out
   }
 }
 
-void CommandHandler::set(const resp::Command& cmd, bool asking, std::string& out) {
-  Access access = store_.set(cmd[1], cmd[2], asking);
+void CommandHandler::set(const resp::Command& cmd, bool asking, net::Session& session,
+                         std::string& out) {
+  uint64_t seq = 0;
+  Access access = store_.set(cmd[1], cmd[2], asking, seq);
   if (access != Access::kServed) return appendRedirect(access, cluster::keySlot(cmd[1]), out);
+  // In cluster mode the reply is held until the backup has the write.
+  session.reply_seq = seq;
   resp::appendSimpleString(out, "OK");
 }
 
-void CommandHandler::del(const resp::Command& cmd, bool asking, std::string& out) {
+void CommandHandler::del(const resp::Command& cmd, bool asking, net::Session& session,
+                         std::string& out) {
   std::span<const std::string> keys(cmd.begin() + 1, cmd.end());
   const uint16_t slot = cluster::keySlot(keys[0]);
   int64_t total = 0;
@@ -98,13 +103,16 @@ void CommandHandler::del(const resp::Command& cmd, bool asking, std::string& out
         return resp::appendError(out, "CROSSSLOT Keys in request don't hash to the same slot");
       }
     }
-    Access access = store_.del(keys, asking, total);
+    uint64_t seq = 0;
+    Access access = store_.del(keys, asking, total, seq);
     if (access != Access::kServed) return appendRedirect(access, slot, out);
+    session.reply_seq = seq;
   } else {
     // Standalone: every slot is local; delete key by key.
     for (size_t i = 0; i < keys.size(); ++i) {
       int64_t deleted = 0;
-      store_.del(keys.subspan(i, 1), asking, deleted);
+      uint64_t seq = 0;  // standalone: nothing is replicated
+      store_.del(keys.subspan(i, 1), asking, deleted, seq);
       total += deleted;
     }
   }
@@ -124,6 +132,8 @@ void CommandHandler::appendRedirect(Access access, uint16_t slot, std::string& o
       return resp::appendError(out, "ASK " + std::to_string(slot) + " " + *addr);
     case Access::kTryAgain:
       return resp::appendError(out, "TRYAGAIN Key is being migrated, retry the request");
+    case Access::kNoReplicas:
+      return resp::appendError(out, kNoReplicasError);
     case Access::kServed:
       break;
   }

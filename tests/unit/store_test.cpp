@@ -20,12 +20,14 @@ std::optional<std::string> get(const Store& store, std::string_view key) {
 }
 
 void set(Store& store, std::string_view key, std::string_view value) {
-  EXPECT_EQ(store.set(key, value, false), Access::kServed);
+  uint64_t seq = 0;
+  EXPECT_EQ(store.set(key, value, false, seq), Access::kServed);
 }
 
 bool del(Store& store, const std::string& key) {
   int64_t deleted = 0;
-  EXPECT_EQ(store.del(std::span<const std::string>(&key, 1), false, deleted), Access::kServed);
+  uint64_t seq = 0;
+  EXPECT_EQ(store.del(std::span<const std::string>(&key, 1), false, deleted, seq), Access::kServed);
   return deleted == 1;
 }
 
@@ -151,9 +153,18 @@ class SlotStateTest : public ::testing::Test {
     std::optional<std::string> value;
     return store_.get(k, asking, value);
   }
+  Access setAccess(std::string_view k, std::string_view v, bool asking = false) {
+    uint64_t seq = 0;
+    return store_.set(k, v, asking, seq);
+  }
   Access delAccess(std::vector<std::string> keys, bool asking = false) {
     int64_t deleted = 0;
-    return store_.del(keys, asking, deleted);
+    uint64_t seq = 0;
+    return store_.del(keys, asking, deleted, seq);
+  }
+  Store::ImportResult import(uint64_t id, uint64_t seq, const std::vector<KeyValue>& batch) {
+    uint64_t repl_seq = 0;
+    return store_.importBatch(slot(), id, seq, batch, repl_seq);
   }
 
   Store store_{16};
@@ -162,7 +173,7 @@ class SlotStateTest : public ::testing::Test {
 TEST_F(SlotStateTest, NotOwnedSlotRedirectsEverything) {
   store_.applyOwnership(slot(), false);
   EXPECT_EQ(getAccess(key("a")), Access::kMoved);
-  EXPECT_EQ(store_.set(key("a"), "v", false), Access::kMoved);
+  EXPECT_EQ(setAccess(key("a"), "v", false), Access::kMoved);
   EXPECT_EQ(delAccess({key("a")}), Access::kMoved);
   // ASKING does not help for a slot that is not being imported.
   EXPECT_EQ(getAccess(key("a"), true), Access::kMoved);
@@ -171,8 +182,8 @@ TEST_F(SlotStateTest, NotOwnedSlotRedirectsEverything) {
 TEST_F(SlotStateTest, ImportingSlotServesOnlyAskingClients) {
   store_.applyOwnership(slot(), false);
   ASSERT_TRUE(store_.beginImport(slot(), 7));
-  EXPECT_EQ(store_.set(key("a"), "v", false), Access::kMoved);
-  EXPECT_EQ(store_.set(key("a"), "v", true), Access::kServed);
+  EXPECT_EQ(setAccess(key("a"), "v", false), Access::kMoved);
+  EXPECT_EQ(setAccess(key("a"), "v", true), Access::kServed);
   EXPECT_EQ(getAccess(key("a"), true), Access::kServed);
   EXPECT_EQ(getAccess(key("a"), false), Access::kMoved);
 }
@@ -184,11 +195,11 @@ TEST_F(SlotStateTest, MigratingSlotServesPresentKeysAndAsksForAbsentOnes) {
   std::optional<std::string> value;
   EXPECT_EQ(store_.get(key("present"), false, value), Access::kServed);
   EXPECT_EQ(value, "v");
-  EXPECT_EQ(store_.set(key("present"), "v2", false), Access::kServed);
+  EXPECT_EQ(setAccess(key("present"), "v2", false), Access::kServed);
 
   EXPECT_EQ(getAccess(key("absent")), Access::kAsk);
   // New keys are created on the target, never on the source.
-  EXPECT_EQ(store_.set(key("absent"), "v", false), Access::kAsk);
+  EXPECT_EQ(setAccess(key("absent"), "v", false), Access::kAsk);
   EXPECT_FALSE(store_.contains(key("absent")));
   EXPECT_EQ(delAccess({key("absent")}), Access::kAsk);
   // Split between source and target: cannot be served atomically.
@@ -205,7 +216,7 @@ TEST_F(SlotStateTest, InFlightKeysAreReadableButFrozen) {
   std::optional<std::string> value;
   EXPECT_EQ(store_.get(key("a"), false, value), Access::kServed);
   EXPECT_EQ(value, "v1");
-  EXPECT_EQ(store_.set(key("a"), "v2", false), Access::kTryAgain);
+  EXPECT_EQ(setAccess(key("a"), "v2", false), Access::kTryAgain);
   EXPECT_EQ(delAccess({key("a")}), Access::kTryAgain);
 
   store_.finishMigrationBatch(slot(), batch);
@@ -242,23 +253,28 @@ TEST_F(SlotStateTest, MigrationBatchRespectsByteLimitButTakesAtLeastOneKey) {
 
 TEST_F(SlotStateTest, ImportRequiresMatchingMigration) {
   std::vector<KeyValue> batch = {{key("a"), "v"}};
-  EXPECT_EQ(store_.importBatch(slot(), 1, 1, batch), Store::ImportResult::kRejected);  // owned
+  EXPECT_EQ(import(1, 1, batch), Store::ImportResult::kRejected);  // owned
   store_.applyOwnership(slot(), false);
   ASSERT_TRUE(store_.beginImport(slot(), 5));
-  EXPECT_FALSE(store_.beginImport(slot(), 6));  // a different migration
-  EXPECT_EQ(store_.importBatch(slot(), 6, 1, batch), Store::ImportResult::kRejected);
-  EXPECT_EQ(store_.importBatch(slot(), 5, 1, batch), Store::ImportResult::kApplied);
+  EXPECT_FALSE(store_.beginImport(slot(), 4));  // an older migration
+  EXPECT_EQ(import(6, 1, batch), Store::ImportResult::kRejected);  // not the current one
+  EXPECT_EQ(import(5, 1, batch), Store::ImportResult::kApplied);
+  // A newer migration re-arms the import (resume after a failover); the
+  // older one can no longer import.
+  EXPECT_TRUE(store_.beginImport(slot(), 6));
+  EXPECT_EQ(import(5, 2, batch), Store::ImportResult::kRejected);
+  EXPECT_EQ(import(6, 1, batch), Store::ImportResult::kApplied);
 }
 
 TEST_F(SlotStateTest, DelayedImportBatchCannotOverwriteNewerWrites) {
   store_.applyOwnership(slot(), false);
   ASSERT_TRUE(store_.beginImport(slot(), 5));
   // Attempt seq=1 times out at the source; seq=2 (same keys) is applied.
-  ASSERT_EQ(store_.importBatch(slot(), 5, 2, {{key("a"), "v1"}}), Store::ImportResult::kApplied);
+  ASSERT_EQ(import(5, 2, {{key("a"), "v1"}}), Store::ImportResult::kApplied);
   // The source deletes its copy; a client redirected here overwrites the key.
-  ASSERT_EQ(store_.set(key("a"), "client-write", true), Access::kServed);
+  ASSERT_EQ(setAccess(key("a"), "client-write", true), Access::kServed);
   // The slow first attempt finally arrives. It must be ignored.
-  EXPECT_EQ(store_.importBatch(slot(), 5, 1, {{key("a"), "v1"}}), Store::ImportResult::kStale);
+  EXPECT_EQ(import(5, 1, {{key("a"), "v1"}}), Store::ImportResult::kStale);
   std::optional<std::string> value;
   ASSERT_EQ(store_.get(key("a"), true, value), Access::kServed);
   EXPECT_EQ(value, "client-write");
