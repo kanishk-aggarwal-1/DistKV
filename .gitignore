@@ -19,7 +19,9 @@ Thumbs.db
 # Curated results are committed under named directories (e.g. bench/results/phase1-local/).
 /bench/results/local-*/
 
-# Terraform (Phase 4): state and provider caches must never be committed
+# Terraform (Phase 4): state and provider caches must never be committed;
+# deploy/.generated holds the cluster SSH key and the inventory.
+/deploy/.generated/
 .terraform/
 *.tfstate
 *.tfstate.*

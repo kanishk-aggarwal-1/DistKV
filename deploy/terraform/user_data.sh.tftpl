@@ -1,0 +1,36 @@
+#!/bin/bash
+# Boot script (cloud-init user data), rendered by Terraform.
+# Role: ${role}
+set -euxo pipefail
+
+# Safety net against forgotten clusters: shut down (and, since the instance is
+# set to terminate on shutdown, be deleted) ${max_lifetime_minutes} minutes after boot.
+shutdown -h +${max_lifetime_minutes} "DistKV safety net: maximum lifetime reached"
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+
+%{ if role == "loadgen" ~}
+# Builds the binaries for the cluster (same OS and architecture as the nodes)
+# and runs memtier_benchmark.
+apt-get install -y --no-install-recommends \
+    build-essential cmake ninja-build git ca-certificates rsync \
+    libgrpc++-dev libprotobuf-dev protobuf-compiler protobuf-compiler-grpc \
+    redis-tools redis-server \
+    autoconf automake libtool pkg-config libevent-dev libssl-dev zlib1g-dev libpcre3-dev
+# The loadgen must not run a Redis of its own.
+systemctl disable --now redis-server || true
+
+git clone --depth 1 --branch 2.5.1 https://github.com/RedisLabs/memtier_benchmark.git /tmp/memtier
+(cd /tmp/memtier && autoreconf -ivf && ./configure && make -j"$(nproc)" && make install)
+rm -rf /tmp/memtier
+%{ else ~}
+# Runtime libraries for distkv-server / -coordinator / -admin, plus redis-cli
+# for health checks and redis-server for the Phase 5 baseline.
+apt-get install -y --no-install-recommends libgrpc++-dev libprotobuf-dev redis-tools redis-server
+systemctl disable --now redis-server || true
+%{ endif ~}
+
+mkdir -p /home/ubuntu/distkv/bin /home/ubuntu/distkv/logs
+chown -R ubuntu:ubuntu /home/ubuntu/distkv
+touch /var/lib/distkv-ready

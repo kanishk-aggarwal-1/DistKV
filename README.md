@@ -17,7 +17,7 @@ weaknesses are written up in [docs/DESIGN.md](docs/DESIGN.md).
 | 1 | Single-node server: epoll event loops, RESP parser, lock-striped store | Done |
 | 2 | Sharding: consistent hashing with virtual nodes, MOVED/ASK routing, live slot migration | Done |
 | 3 | Synchronous primary-backup replication, heartbeats, automatic failover with epoch fencing | Done |
-| 4 | AWS deployment across 3 availability zones with Terraform | Planned |
+| 4 | AWS deployment across 3 availability zones with Terraform | Built and statically verified; first real deployment pending |
 | 5 | Benchmarks against Redis on EC2, failure testing | Planned |
 | 6 | Final documentation | Planned |
 
@@ -153,6 +153,38 @@ Node flags: `--port`, `--threads`, `--stripes`, and for cluster mode
 Coordinator flags: `--port`, `--vnodes`, `--slots-per-step`, `--heartbeat-ms`,
 `--failure-timeout-ms`.
 
+## Running on AWS
+
+[deploy/](deploy/) creates a VPC across three availability zones:
+- 3 replication groups, with each primary and its backup in different AZs;
+- a spare node;
+- a coordinator;
+- a load generator that also builds the binaries.
+
+Instances are Graviton `c7g`, costing **roughly $0.50/hour** for the whole
+cluster. Traffic between AZs is billed on top. See
+[docs/DESIGN.md](docs/DESIGN.md#phase-4-aws-deployment) for the estimate and
+its caveats.
+
+Prerequisites: an AWS account, `aws configure` done (on Windows or in the dev
+container), and ideally an AWS Budgets alert. Everything below runs inside the
+dev container (`.\scripts\dev.ps1`).
+
+```bash
+deploy/scripts/up.sh          # terraform apply: shows the plan and asks before creating anything
+deploy/scripts/deploy.sh      # build on the load generator, copy binaries to every instance
+deploy/scripts/start.sh       # start coordinator and nodes, form groups, add the spare
+deploy/scripts/status.sh      # processes per instance + cluster map
+deploy/scripts/ssh.sh loadgen # shell on the load generator (memtier, redis-cli)
+deploy/scripts/kill-node.sh n1   # SIGKILL a node (failure testing)
+deploy/scripts/stop.sh        # stop all processes, keep the instances
+deploy/scripts/teardown.sh    # destroy everything and verify nothing tagged distkv is left
+```
+
+**Safety net:** every instance shuts itself down, and is then terminated, 4
+hours after boot (`-var max_lifetime_hours=N` to change). A forgotten cluster
+can't keep billing for long, but `teardown.sh` is still the way to finish.
+
 ## Testing
 
 ```bash
@@ -179,7 +211,9 @@ scripts/check.sh debug        # a single preset
     - when a primary is cut off from the coordinator (fencing);
   - end-to-end checks with real processes and `redis-cli -c`, including a
     `SIGKILL` failover.
-- **CI** runs all three builds on every push. The ThreadSanitizer build skips
+- **CI** runs all three builds on every push, plus an `infra` job:
+  Terraform fmt, validate, and a plan against mocked AWS that checks the
+  multi-AZ layout (`terraform test`), and shellcheck. The ThreadSanitizer build skips
   the three failure-injection tests, because gRPC isn't built with TSan (see
   DESIGN.md).
 
