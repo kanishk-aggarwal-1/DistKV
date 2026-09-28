@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         redis-server redis-tools \
         libgrpc++-dev libprotobuf-dev protobuf-compiler protobuf-compiler-grpc \
         autoconf automake libtool pkg-config libevent-dev libssl-dev zlib1g-dev libpcre3-dev \
-        curl unzip jq openssh-client rsync shellcheck python3 \
+        curl unzip jq openssh-client rsync shellcheck python3 python3-matplotlib \
     && rm -rf /var/lib/apt/lists/*
 
 # memtier_benchmark is not packaged for Ubuntu 24.04; build a pinned release.

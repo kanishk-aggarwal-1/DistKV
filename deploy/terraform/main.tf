@@ -224,10 +224,12 @@ resource "aws_instance" "loadgen" {
 resource "local_file" "inventory" {
   filename = "${path.module}/../.generated/inventory.json"
   content = jsonencode({
-    region   = var.region
-    ssh_user = "ubuntu"
-    groups   = var.groups
-    spares   = var.spares
+    region                = var.region
+    ssh_user              = "ubuntu"
+    node_instance_type    = var.node_instance_type
+    loadgen_instance_type = var.loadgen_instance_type
+    groups                = var.groups
+    spares                = var.spares
     coordinator = {
       public_ip  = aws_instance.coordinator.public_ip
       private_ip = aws_instance.coordinator.private_ip

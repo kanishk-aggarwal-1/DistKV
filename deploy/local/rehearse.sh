@@ -48,7 +48,7 @@ write_inventory() {
   local joined
   joined=$(IFS=,; echo "${nodes[*]}")
   cat > "$GEN/inventory.json" <<EOF
-{"region":"local","ssh_user":"ubuntu","groups":$NUM_GROUPS,"spares":$NUM_SPARES,
+{"region":"local","ssh_user":"ubuntu","node_instance_type":"docker (rehearsal)","loadgen_instance_type":"docker (rehearsal)","groups":$NUM_GROUPS,"spares":$NUM_SPARES,
  "coordinator":{"public_ip":"$SUBNET_PREFIX.10","private_ip":"$SUBNET_PREFIX.10","az":"local-0"},
  "loadgen":{"public_ip":"$SUBNET_PREFIX.11","private_ip":"$SUBNET_PREFIX.11","az":"local-0"},
  "nodes":[$joined]}

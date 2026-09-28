@@ -8,6 +8,13 @@ std::shared_ptr<grpc::Channel> makeChannel(const std::string& addr) {
   grpc::ChannelArguments args;
   args.SetMaxReceiveMessageSize(kMaxMessageBytes);
   args.SetMaxSendMessageSize(kMaxMessageBytes);
+  // Nodes come and go (failures, restarts, spares). gRPC's default reconnect
+  // backoff grows to 120 s, during which calls on the channel fail at once:
+  // a node restarted at a previously failed address could not be re-added
+  // for up to two minutes. Cap it at 1 s.
+  args.SetInt("grpc.initial_reconnect_backoff_ms", 100);
+  args.SetInt("grpc.min_reconnect_backoff_ms", 100);
+  args.SetInt("grpc.max_reconnect_backoff_ms", 1000);
   // Traffic stays inside the cluster's private network (see DESIGN.md).
   return grpc::CreateCustomChannel(addr, grpc::InsecureChannelCredentials(), args);
 }

@@ -20,6 +20,7 @@
 #include "cluster/hash_ring.h"
 #include "cluster/slot.h"
 #include "coordinator/coordinator.h"
+#include "net/socket_utils.h"
 #include "server/server.h"
 #include "support/resp_client.h"
 
@@ -44,10 +45,10 @@ class LocalCluster {
  public:
   explicit LocalCluster(coordinator::CoordinatorConfig config = {}) : coordinator_(config) {}
 
-  Server& startNode(const std::string& id) {
+  Server& startNode(const std::string& id, uint16_t grpc_port = 0) {
     ServerConfig config;
     config.port = 0;
-    config.grpc_port = 0;
+    config.grpc_port = grpc_port;
     config.threads = 2;
     config.stripes = 64;
     config.cluster = true;
@@ -518,6 +519,39 @@ TEST(Failover, PromotedBackupHasEveryAcknowledgedWrite) {
     EXPECT_EQ(cluster.node(group->backup).store().peek(key), value) << key;
   }
   expectStableSlotStates(cluster);
+}
+
+// A node that failed and is restarted at the same address (as the failure
+// test does, re-adding the killed node as a spare) can be re-added at once.
+// Regression: the coordinator's cached gRPC channel to that address was in
+// gRPC's reconnect backoff (up to 120 s by default), so re-adding it failed.
+TEST(Coordinator, NodeRestartedAtAFailedAddressCanRejoinPromptly) {
+  LocalCluster cluster;
+  cluster.addGroup("n1", "n2");
+
+  // A fixed gRPC port, so the restarted node has the same address.
+  int probe = net::createListenSocket(0);
+  const uint16_t grpc_port = net::localPort(probe);
+  ::close(probe);
+
+  distkv::v1::MembershipChange change;
+  const std::string addr = cluster.startNode("n3", grpc_port).grpcAddress();
+  ASSERT_TRUE(cluster.coordinator().addSpare(addr, &change).ok());
+
+  // The spare dies; the coordinator's heartbeats fail until it is removed.
+  // gRPC keeps reconnecting in the background with growing delays (1 s,
+  // 1.6 s, 2.6 s, ... by default), so wait as long as a failure-test round
+  // does before bringing the node back.
+  cluster.node("n3").stop();
+  ASSERT_TRUE(waitUntil([&] { return cluster.coordinator().map().findNode("n3") == nullptr; }, 10s));
+  std::this_thread::sleep_for(15s);
+
+  // Restarted at the same address and re-added right away.
+  cluster.startNode("n3", grpc_port);
+  const auto started = Clock::now();
+  grpc::Status status = cluster.coordinator().addSpare(addr, &change);
+  EXPECT_TRUE(status.ok()) << status.error_message();
+  EXPECT_LT(Clock::now() - started, 5s);
 }
 
 // A source primary dies in the middle of a rebalance. Its promoted backup

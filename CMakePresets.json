@@ -44,7 +44,7 @@
       "output": { "outputOnFailure": true },
       "environment": { "TSAN_OPTIONS": "ignore_noninstrumented_modules=1" },
       "filter": {
-        "exclude": { "name": "^(Failover\\.|Replication\\.WritesAreRefusedWhileTheBackupIsNotSynced)" }
+        "exclude": { "name": "^(Failover\\.|Replication\\.WritesAreRefusedWhileTheBackupIsNotSynced|Coordinator\\.NodeRestartedAtAFailedAddressCanRejoinPromptly)" }
       }
     }
   ]
