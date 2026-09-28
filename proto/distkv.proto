@@ -1,0 +1,88 @@
+// Internal (node-to-node and coordinator-to-node) protocol. Clients never
+// see this: they speak RESP to the nodes.
+syntax = "proto3";
+
+package distkv.v1;
+
+message Empty {}
+
+message Node {
+  string id = 1;
+  string client_addr = 2;  // host:port for RESP clients
+  string grpc_addr = 3;    // host:port for this protocol
+}
+
+// The authoritative assignment of slots to nodes, owned by the coordinator.
+// Every change increments the epoch; nodes ignore maps older than the one
+// they already have.
+message ClusterMap {
+  uint64 epoch = 1;
+  repeated Node nodes = 2;
+  // 16384 entries: slot_owner[s] is an index into `nodes`. Empty before the
+  // first node joins.
+  repeated uint32 slot_owner = 3;
+}
+
+message SlotMigration {
+  repeated uint32 slots = 1;
+  string peer_id = 2;       // the target (when migrating) or source (when importing)
+  uint64 migration_id = 3;  // unique per migration step, chosen by the coordinator
+}
+
+message MigrateSlotsRequest {
+  repeated uint32 slots = 1;
+  Node target = 2;
+  uint64 migration_id = 3;
+}
+
+message MigrateSlotsResponse {
+  uint64 keys_moved = 1;
+}
+
+message KeyValue {
+  bytes key = 1;
+  bytes value = 2;
+}
+
+message ImportKeysRequest {
+  uint32 slot = 1;
+  uint64 migration_id = 2;
+  uint64 seq = 3;  // increases with every batch the source sends
+  repeated KeyValue entries = 4;
+}
+
+// Served by every storage node.
+service NodeService {
+  rpc GetNodeInfo(Empty) returns (Node);
+  rpc ApplyClusterMap(ClusterMap) returns (Empty);
+  // Source side: start answering ASK for absent keys of these slots.
+  rpc SetMigrating(SlotMigration) returns (Empty);
+  // Target side: accept imports and ASKING clients for these slots.
+  rpc SetImporting(SlotMigration) returns (Empty);
+  // Source side: move every key of these slots to the target. Returns when
+  // the slots are empty here.
+  rpc MigrateSlots(MigrateSlotsRequest) returns (MigrateSlotsResponse);
+  // Target side: one batch of keys from the source.
+  rpc ImportKeys(ImportKeysRequest) returns (Empty);
+}
+
+message AddNodeRequest {
+  string grpc_addr = 1;  // the coordinator asks the node for its details
+}
+
+message RemoveNodeRequest {
+  string id = 1;
+}
+
+message MembershipChange {
+  uint64 epoch = 1;
+  uint32 slots_moved = 2;
+  uint64 keys_moved = 3;
+}
+
+// Served by the coordinator.
+service CoordinatorService {
+  rpc AddNode(AddNodeRequest) returns (MembershipChange);
+  rpc RemoveNode(RemoveNodeRequest) returns (MembershipChange);
+  rpc GetClusterMap(Empty) returns (ClusterMap);
+}

@@ -1,0 +1,11 @@
+date_utc: 2026-09-28T06:47:40Z
+git_rev: 96c0d87
+kernel: 6.6.87.2-microsoft-standard-WSL2
+cpu: 11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz
+nproc: 8
+server_cpus: 0-3
+client_cpus: 4-7
+redis: Redis server v=7.0.15 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64 build=e53ff17674aa6190
+memtier: memtier_benchmark v=2.5.1 sha=5f634d17:0 bits=64 libevent=2.1.12-stable openssl=OpenSSL 3.0.13 30 Jan 2024 prometheus=yes
+memtier_args: -t 4 -c 25 --ratio=1:10 --data-size=32 --key-pattern=R:R --key-maximum=100000 --test-time=20
+note: git_rev above is the base commit; the working tree contained the uncommitted Phase 2 changes (later fixed in run_local.sh to record -dirty)

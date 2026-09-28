@@ -4,7 +4,8 @@
 set -euo pipefail
 
 SERVER_BIN=${1:?usage: $0 <distkv-server>}
-PORT=${KV_TEST_PORT:-$((20000 + RANDOM % 20000))}
+# Below Linux's ephemeral range (32768+), so no outgoing connection holds it.
+PORT=${KV_TEST_PORT:-$((22500 + RANDOM % 10000))}
 
 "$SERVER_BIN" --port "$PORT" --threads 2 > /dev/null &
 SERVER_PID=$!

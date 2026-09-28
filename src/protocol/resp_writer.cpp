@@ -30,4 +30,10 @@ void appendBulkString(std::string& out, std::string_view data) {
 
 void appendNullBulkString(std::string& out) { out += "$-1\r\n"; }
 
+void appendArrayHeader(std::string& out, size_t count) {
+  out += '*';
+  out += std::to_string(count);
+  out += "\r\n";
+}
+
 }  // namespace kv::resp
