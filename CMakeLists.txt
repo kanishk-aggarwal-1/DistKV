@@ -79,7 +79,8 @@ target_link_libraries(distkv_core PUBLIC distkv_proto Threads::Threads)
 foreach(target_and_source
     "distkv-server:src/server/main.cpp"
     "distkv-coordinator:src/coordinator/main.cpp"
-    "distkv-admin:src/tools/admin_main.cpp")
+    "distkv-admin:src/tools/admin_main.cpp"
+    "distkv-verifier:src/tools/verifier_main.cpp")
   string(REPLACE ":" ";" parts ${target_and_source})
   list(GET parts 0 name)
   list(GET parts 1 source)

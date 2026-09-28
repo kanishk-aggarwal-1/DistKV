@@ -755,7 +755,7 @@ Killing or cutting off a node makes gRPC connect to dead peers. That produced
     threads that run our handlers the same way (`grpc_core::Thread`).
   - So any rule that silences these reports would also silence real races in
     our NodeService handlers.
-- **What I did instead:** the TSan test preset excludes the three tests that
+- **What I did instead:** the TSan test preset excludes the tests that
   inject failures: `Failover.*` and
   `Replication.WritesAreRefusedWhileTheBackupIsNotSynced`.
   - They still run under the debug and ASan builds.
@@ -941,3 +941,54 @@ inventory points the **unmodified** deploy scripts at them;
 package installs, the arm64 build, real AZs and network latency, and
 instance termination. Those are verified on the first real `up.sh` run, which
 is billable and needs the operator's go-ahead.
+
+---
+
+## Phase 5: Benchmarking and failure testing (tooling built; EC2 runs pending)
+
+**Nothing below is a result.** The EC2 runs are still to be done. These notes
+cover the methodology and the tooling, and what rehearsing them locally
+caught.
+
+### Methodology (as decided)
+
+- **Benchmark** (`bench/aws/run_benchmarks.sh`): four targets on identical instances.
+  - Redis standalone against DistKV standalone.
+  - Redis Cluster (3 primaries plus 3 replicas, placed like DistKV's groups)
+    against the DistKV cluster.
+  - Same memtier mix as Phase 1: 1 SET : 10 GET, 32-byte values.
+  - Pipeline 1 and 16; 3 runs of 60 s each; median and range reported.
+  - Caveat: Redis replicates asynchronously; DistKV waits for its backup.
+- **Failure test** (`bench/aws/run_failover_test.sh` + `distkv-verifier`):
+  - Kill a primary under background load, 5 rounds rotating over the groups.
+  - Every acknowledged write is read back, and any loss makes the verifier
+    exit non-zero.
+  - Failover time is measured from the kill to the first acknowledged write
+    in the victim's slots. It's reported as a range, because the kill lands
+    somewhere between issuing the command and the command returning.
+  - A bystander probe shows whether the other groups stayed available.
+- **Charts** (`bench/summarize.py`, `bench/plot.py`) are generated only from
+  the committed raw files.
+
+### Caught by the local rehearsal (fixed)
+
+- **Restarted nodes couldn't rejoin.** The coordinator's cached gRPC channel
+  stayed in gRPC's reconnect backoff (up to 120 s by default), so a node
+  restarted at a previously failed address was refused. Fixed by capping the
+  backoff at 1 s and having `GetNodeInfo` wait for the connection. The
+  regression test fails without the fix and passes with it.
+- **Redeploying to a running cluster failed partway** ("text file busy").
+  Fixed by uploading under a temporary name and renaming into place.
+- **The kill window was 609 ms,** from a fresh SSH handshake. Fixed by
+  reusing a persistent connection: now 33–83 ms.
+- **The first timeline chart was misleading.** It plotted all writes to the
+  victim's slots against a single probe. It now plots probe against probe,
+  which write at the same pace.
+
+### Open issue to check on EC2
+
+In the local rehearsal, the write rate before the kill fell from about 5.0k/s
+to 1.3k/s by round 3. Repeated runs without kills reproduced a similar drop
+once, then not again in four more attempts. Standalone stayed flat. The cause
+is unknown. The failover summary now reports the write rate before the kill
+for every round, so the EC2 runs will show whether it's real.

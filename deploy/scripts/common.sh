@@ -60,6 +60,25 @@ private_ip() {
 node_ids() { inv '.nodes[].id'; }
 all_hosts() { echo coordinator; echo loadgen; node_ids; }
 
+# start_process HOST_IP NAME COMMAND: runs COMMAND detached on the host, with
+# its log in ~/distkv/logs/NAME.log and its pid in ~/distkv/NAME.pid. No
+# automatic restart: a killed process stays dead, as the failure tests require.
+start_process() {
+  local ip=$1 name=$2 cmd=$3
+  remote "$ip" "cd $REMOTE_DIR && if [ -f $name.pid ] && kill -0 \$(cat $name.pid) 2>/dev/null; then
+      echo '   $name already running'; exit 0; fi
+    nohup setsid $cmd > logs/$name.log 2>&1 < /dev/null & echo \$! > $name.pid"
+}
+
+# stop_process HOST_IP NAME: stops a process started by start_process.
+stop_process() {
+  local ip=$1 name=$2
+  remote "$ip" "cd $REMOTE_DIR && if [ -f $name.pid ]; then
+      pid=\$(cat $name.pid); kill \$pid 2>/dev/null || true
+      for i in \$(seq 50); do kill -0 \$pid 2>/dev/null || break; sleep 0.1; done
+      rm -f $name.pid; fi"
+}
+
 # admin ARGS... : runs distkv-admin on the coordinator host.
 admin() {
   remote "$(public_ip coordinator)" "$REMOTE_DIR/bin/distkv-admin" --coordinator "127.0.0.1:$COORD_PORT" "$@"

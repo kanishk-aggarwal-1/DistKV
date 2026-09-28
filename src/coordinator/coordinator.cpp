@@ -93,6 +93,9 @@ grpc::Status Coordinator::fetchNodeInfo(const std::string& grpc_addr, NodeInfo& 
   grpc::Status status = withRetries([&] {
     grpc::ClientContext ctx;
     cluster::setDeadline(ctx, cluster::kControlRpcTimeout);
+    // A node being (re)added may have just started: wait for the connection
+    // (up to the deadline) instead of failing on a channel still backing off.
+    ctx.set_wait_for_ready(true);
     return stub(grpc_addr).GetNodeInfo(&ctx, distkv::v1::Empty(), &reply);
   });
   if (!status.ok()) return annotate(status, "GetNodeInfo " + grpc_addr);

@@ -18,7 +18,7 @@ weaknesses are written up in [docs/DESIGN.md](docs/DESIGN.md).
 | 2 | Sharding: consistent hashing with virtual nodes, MOVED/ASK routing, live slot migration | Done |
 | 3 | Synchronous primary-backup replication, heartbeats, automatic failover with epoch fencing | Done |
 | 4 | AWS deployment across 3 availability zones with Terraform | Built; scripts rehearsed locally on Docker stand-ins; first real AWS deployment pending |
-| 5 | Benchmarks against Redis on EC2, failure testing | Planned |
+| 5 | Benchmarks against Redis on EC2, failure testing | Tooling built and rehearsed locally; EC2 runs pending |
 | 6 | Final documentation | Planned |
 
 ## Architecture
@@ -221,7 +221,7 @@ scripts/check.sh debug        # a single preset
 - **CI** runs all three builds on every push, plus an `infra` job:
   Terraform fmt, validate, and a plan against mocked AWS that checks the
   multi-AZ layout (`terraform test`), and shellcheck. The ThreadSanitizer build skips
-  the three failure-injection tests, because gRPC isn't built with TSan (see
+  the failure-injection tests, because gRPC isn't built with TSan (see
   DESIGN.md).
 
 ## Benchmarks

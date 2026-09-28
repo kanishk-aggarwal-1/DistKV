@@ -8,16 +8,6 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 require_inventory
 
-# start_process HOST NAME COMMAND: runs COMMAND detached on HOST, with its log
-# in ~/distkv/logs/NAME.log and its pid in ~/distkv/NAME.pid. No automatic
-# restart: a killed process stays dead, as the failure tests require.
-start_process() {
-  local ip=$1 name=$2 cmd=$3
-  remote "$ip" "cd $REMOTE_DIR && if [ -f $name.pid ] && kill -0 \$(cat $name.pid) 2>/dev/null; then
-      echo '   $name already running'; exit 0; fi
-    nohup setsid $cmd > logs/$name.log 2>&1 < /dev/null & echo \$! > $name.pid"
-}
-
 echo "== coordinator"
 start_process "$(public_ip coordinator)" coordinator \
   "$REMOTE_DIR/bin/distkv-coordinator --port $COORD_PORT"
