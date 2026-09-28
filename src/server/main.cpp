@@ -1,3 +1,4 @@
+#include <cerrno>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -18,11 +19,20 @@ void usage(const char* prog) {
                prog);
 }
 
+// Parses a whole non-negative decimal number; rejects "", "12x", "-1".
+bool parseNumber(const char* text, unsigned long& value) {
+  if (*text < '0' || *text > '9') return false;
+  char* end = nullptr;
+  errno = 0;
+  value = std::strtoul(text, &end, 10);
+  return errno == 0 && *end == '\0';
+}
+
 bool parseArgs(int argc, char** argv, kv::ServerConfig& config) {
   for (int i = 1; i < argc; ++i) {
     std::string flag = argv[i];
-    if (i + 1 >= argc) return false;
-    unsigned long value = std::strtoul(argv[++i], nullptr, 10);
+    unsigned long value = 0;
+    if (i + 1 >= argc || !parseNumber(argv[++i], value)) return false;
     if (flag == "--port" && value <= 65535) {
       config.port = static_cast<uint16_t>(value);
     } else if (flag == "--threads") {
